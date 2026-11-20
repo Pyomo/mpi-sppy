@@ -900,7 +900,7 @@ class PHBase(mpisppy.spopt.SPOpt):
 
         """
         tol = self.prox_approx_tol
-        for sn, s in self.local_scenarios.items():
+        for s in self.local_scenarios.values():
             persistent_solver = (s._solver_plugin if sputils.is_persistent(s._solver_plugin) else None)
             #print(f"total number of proximal cuts: {len(s._mpisppy_model.xsqvar_cuts)}")
             for prox_approx_manager in s._mpisppy_data.xsqvar_prox_approx.values():
@@ -914,8 +914,8 @@ class PHBase(mpisppy.spopt.SPOpt):
                     # No solve has given this nonant a value yet: the prox
                     # term is on in iteration 0 because WXBarReader supplied
                     # xbar. Cut around xbar, where the prox term is centered.
-                    prox_approx_manager.add_cuts(prox_approx_manager.xbar.value,
-                                                 tol, persistent_solver)
+                    prox_approx_manager.add_cuts(
+                        prox_approx_manager.xbar.value, tol, persistent_solver)
                     continue
                 prox_approx_manager.check_tol_add_cut(tol, persistent_solver)
                 prox_approx_manager.xvarsqrd._value = prox_approx_manager.xvar.value**2
@@ -926,7 +926,10 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         for (sname, scenario) in self.local_scenarios.items():
             # these are bound by index to the vardata list at the node
-            scenario._mpisppy_model.W = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            # PH's nonant topology is fixed after setup. Materialize its keys
+            # so Pyomo's retained initializers do not carry dictionary views.
+            nonant_keys = tuple(scenario._mpisppy_data.nonant_indices)
+            scenario._mpisppy_model.W = pyo.Param(nonant_keys,
                                         initialize=0.0,
                                         mutable=True)
 
@@ -945,7 +948,7 @@ class PHBase(mpisppy.spopt.SPOpt):
                     f"defaultPHrho must be a strictly positive number, got "
                     f"{default_rho}. Progressive Hedging requires rho > 0."
                 )
-            scenario._mpisppy_model.rho = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.rho = pyo.Param(nonant_keys,
                                         mutable=True,
                                         default=default_rho)
 
@@ -957,15 +960,16 @@ class PHBase(mpisppy.spopt.SPOpt):
         """ Attach the smoothing terms to the models in `local_scenarios`.
         """
         for (sname, scenario) in self.local_scenarios.items():
-            scenario._mpisppy_model.z = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            nonant_keys = tuple(scenario._mpisppy_data.nonant_indices)
+            scenario._mpisppy_model.z = pyo.Param(nonant_keys,
                                         initialize=0.0,
                                         mutable=True)
 
-            scenario._mpisppy_model.p = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.p = pyo.Param(nonant_keys,
                                         mutable=True,
                                         default=self.options["defaultPHp"])
 
-            scenario._mpisppy_model.beta = pyo.Param(scenario._mpisppy_data.nonant_indices.keys(),
+            scenario._mpisppy_model.beta = pyo.Param(nonant_keys,
                                         mutable=True,
                                         default=self.options["defaultPHbeta"])
 
@@ -1602,24 +1606,31 @@ class PHBase(mpisppy.spopt.SPOpt):
         """
         leaf, models = checkpointing.load_checkpoint(self, ckpt_dir)
 
-        for sname, model in models.items():
-            self.local_scenarios[sname] = model
-            # Eobjective/Ebound read these objective handles; left alone they
-            # would dangle to the fresh model we just replaced.
-            self.saved_objectives[sname] = sputils.find_active_objective(model)
-            # The recourse values came back with the model, so the first
-            # resumed solve can warm-start from them -- but only if the run
-            # asked for warm starts at all: solve_one consults this flag only
-            # when options["warmstart_subproblems"] is set, and that defaults
-            # to False. Setting it here is what makes --warmstart-subproblems
-            # work across a resume; on its own it changes nothing.
-            model._mpisppy_data.solution_available = True
-        # The generic file-based path keeps this alias and CGBase.solve_loop
-        # iterates it; a plain PH has no such attribute.
-        if getattr(self, "local_subproblems", None) is not None:
-            self.local_subproblems = self.local_scenarios
-
-        self._release_scenario_creator_held_models(models)
+        rebuild = checkpointing._is_rebuild_backend(leaf["backend"])
+        if rebuild:
+            # These are plain per-scenario snapshots. The fresh models remain
+            # in place. Restore solve results before pre_iter0 callbacks; the
+            # variable and component overlay follows extension setup.
+            self._checkpoint_rebuild_states = models
+            self._checkpoint_rebuild_extension_model_state = leaf.get(
+                "extension_model_state", {})
+            self._checkpoint_rebuild_pending = {}
+            checkpointing.restore_rebuild_solve_state(self, models)
+        else:
+            for sname, model in models.items():
+                self.local_scenarios[sname] = model
+                # Eobjective/Ebound read these objective handles; left alone
+                # they would dangle to the fresh model we just replaced.
+                self.saved_objectives[sname] = \
+                    sputils.find_active_objective(model)
+                # The recourse values came back with the model, so the first
+                # resumed solve can warm-start from them if requested.
+                model._mpisppy_data.solution_available = True
+            # The generic file-based path keeps this alias and CGBase.solve_loop
+            # iterates it; a plain PH has no such attribute.
+            if getattr(self, "local_subproblems", None) is not None:
+                self.local_subproblems = self.local_scenarios
+            self._release_scenario_creator_held_models(models)
 
         # varid_to_nonant_index maps id(vardata) -> (ndn, i). dill faithfully
         # brings the dict back, and every key in it is dead: the integers are
@@ -1644,11 +1655,11 @@ class PHBase(mpisppy.spopt.SPOpt):
         # uninterrupted run would have refused.
         self._restore_fixed_nonant_baseline(leaf["initially_fixed_nonants"])
 
-        # The deferred attach runs at the end of Iter0, downstream of here. The
-        # reloaded model already carries the spliced objective and the prox
-        # cuts, so letting it run would double the W terms and duplicate the
-        # prox components.
-        self._deferred_ph_attach = False
+        # A reloaded dill model already carries the spliced objective. A
+        # rebuilt pyfory model needs the normal deferred attach, followed by
+        # replaying its saved proximal cuts.
+        if not rebuild:
+            self._deferred_ph_attach = False
         # But that call also sets state on *this object*, not just on the
         # models, and skipping it would leave the run without it: _prox_approx
         # gates whether new proximal-approximation cuts get added at all, so a
@@ -1717,6 +1728,19 @@ class PHBase(mpisppy.spopt.SPOpt):
         # pointed at dead models.
         if have_extensions:
             self.extobject.pre_iter0()
+
+        if (self._resumed_from_checkpoint
+                and checkpointing._is_rebuild_backend(
+                    self._checkpoint_leaf_state["backend"])):
+            self._checkpoint_rebuild_pending = checkpointing.run_agreed(
+                self,
+                lambda: checkpointing.prepare_rebuild_model_state(
+                    self,
+                    self._checkpoint_rebuild_states,
+                    self._checkpoint_leaf_state.get(
+                        "extension_model_state")),
+                "rebuild their scenario state before solver creation, "
+                "so none of them resumes")
 
         # After pre_iter0 rather than inside the hook that asked for it:
         # SepRho and CoeffRho read cost coefficients from the objective in
@@ -1927,12 +1951,36 @@ class PHBase(mpisppy.spopt.SPOpt):
         if getattr(self, "_deferred_ph_attach", False):
             self._attach_PH_to_objective_after_iter0()
 
+        if (self._resumed_from_checkpoint
+                and checkpointing._is_rebuild_backend(
+                    self._checkpoint_leaf_state["backend"])):
+            checkpointing.run_agreed(
+                self,
+                lambda: checkpointing.restore_rebuild_model_state(
+                    self, self._checkpoint_rebuild_states,
+                    self._checkpoint_rebuild_pending),
+                "replay their proximal state, so none of them resumes")
+
         self.reenable_W_and_prox()
 
         # Last thing in Iter0, because everything an extension or converger
         # rebuilds from the models on the way through has now run and would
         # otherwise overwrite what is restored here.
         self._restore_extension_state_if_resuming()
+
+        if (self._resumed_from_checkpoint
+                and checkpointing._is_rebuild_backend(
+                    self._checkpoint_leaf_state["backend"])):
+            checkpointing.run_agreed(
+                self,
+                lambda: checkpointing.finalize_and_validate_rebuild_model_state(
+                    self, self._checkpoint_rebuild_states,
+                    fingerprint_method=self._checkpoint_leaf_state.get(
+                        "model_fingerprint_method"),
+                    nl_fingerprints=self._checkpoint_leaf_state.get(
+                        "nl_fingerprints")),
+                "validate their rebuilt models, so none of them "
+                "resumes with a changed model")
 
         # Clear the dynamic-overrides overlay at the iter0→iterk
         # transition: static iterk options come from the layer fold,
@@ -2224,11 +2272,12 @@ class PHBase(mpisppy.spopt.SPOpt):
         `local_scenarios`.
         """
         for scenario in self.local_scenarios.values():
+            nonant_keys = tuple(scenario._mpisppy_data.nonant_indices)
             scenario._mpisppy_model.xbars = pyo.Param(
-                scenario._mpisppy_data.nonant_indices.keys(), initialize=0.0, mutable=True
+                nonant_keys, initialize=0.0, mutable=True
             )
             scenario._mpisppy_model.xsqbars = pyo.Param(
-                scenario._mpisppy_data.nonant_indices.keys(), initialize=0.0, mutable=True
+                nonant_keys, initialize=0.0, mutable=True
             )
 
 if __name__ == "__main__":

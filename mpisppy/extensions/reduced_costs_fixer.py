@@ -10,11 +10,11 @@ import numpy as np
 
 from mpisppy.cylinders.reduced_costs_spoke import ReducedCostsSpoke
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.extensions.extension import Extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy.utils.sputils import is_persistent
 
 
-class ReducedCostsFixer(Extension):
+class ReducedCostsFixer(RebuildSafeNoModelChanges):
 
     def __init__(self, spobj):
         super().__init__(spobj)

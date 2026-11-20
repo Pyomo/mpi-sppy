@@ -18,7 +18,7 @@ See ``doc/designs/checkpointing_design.md``. The division of labor is:
   happen in the middle of startup (the reloaded models must be in place before
   solvers are created).
 
-The ``dill-reload`` backend dills each mid-run scenario model, which brings back
+The ``dill-reload`` backend saves each mid-run scenario model, which brings back
 the dual weights, rho, nonant values and fixedness, the recourse values that
 serve as a MIP warm start, and the proximal-approximation cuts, all mutually
 consistent. Everything that does *not* live on a scenario model -- the global
@@ -27,12 +27,18 @@ alongside as a small pickle of plain data.
 """
 
 import hashlib
+import io
 import json
 import math
+import numbers
 import os
 import pickle
 import re
 import shutil
+import uuid
+from array import array
+from collections.abc import KeysView
+from decimal import Decimal, InvalidOperation
 
 import numpy as np
 from pyomo.common.dependencies import attempt_import
@@ -41,6 +47,7 @@ import mpisppy.MPI as MPI
 import mpisppy.utils.pickle_bundle as pickle_bundle
 
 dill, dill_available = attempt_import("dill")
+pyfory, pyfory_available = attempt_import("pyfory")
 
 # Bump when the on-disk layout changes in a way older readers cannot handle.
 #: Bumped when the on-disk shape changes. Version 2 replaced the spoke
@@ -50,7 +57,33 @@ dill, dill_available = attempt_import("dill")
 FORMAT_VERSION = 2
 
 DILL_RELOAD_BACKEND = "dill-reload"
+PYFORY_REBUILD_BACKEND = "pyfory-rebuild"
 LEAF_BACKEND = "leaf"
+NL_FINGERPRINT_METHOD = "nl-sha256"
+
+
+def _is_pyfory_backend(backend):
+    return backend == PYFORY_REBUILD_BACKEND
+
+
+def _is_rebuild_backend(backend):
+    return backend in (PYFORY_REBUILD_BACKEND,)
+
+
+def _uses_write_id(backend):
+    return _is_rebuild_backend(backend)
+
+
+def _uses_codec_version(backend):
+    return _is_rebuild_backend(backend)
+
+
+# The rebuild codecs carry a plain-data state snapshot rather than a Pyomo
+# graph. Pyfory's limits bound malformed or unexpectedly deep payloads.
+PYFORY_MAX_DEPTH = 10000
+PYFORY_MAX_GRAPH_MEMORY_BYTES = 1 << 30
+PYFORY_MIN_VERSION = "1.7.7"
+REBUILD_STATE_VERSION = 2
 
 MANIFEST_NAME = "manifest.json"
 HUB_SUBDIR = "hub"
@@ -93,7 +126,9 @@ NON_STRUCTURAL_CFG_KEYS = frozenset({
     # cadence knob like the iteration limit: it changes what a stop costs, not
     # what problem the checkpoint describes.
     "checkpoint_dir", "checkpoint_backend", "checkpoint_every_iterations",
-    "checkpoint_before_seconds", "resume_from",
+    "checkpoint_before_seconds",
+    "checkpoint_nl_fingerprint",
+    "resume_from",
     # Display, logging and output destinations.
     "verbose", "display_progress", "display_timing",
     "display_convergence_detail", "tee_rank0_solves", "trace_prefix",
@@ -204,6 +239,12 @@ def require_checkpoint_structural_cfg(options):
             "options['checkpoint_structural_cfg'] to describe the model "
             "creator and its structural inputs. The generic-cylinder path "
             "sets it automatically.")
+    if options.get("checkpoint_nl_fingerprint", False):
+        if not _is_rebuild_backend(options.get(
+                "checkpoint_backend", DILL_RELOAD_BACKEND)):
+            raise RuntimeError(
+                "checkpoint_nl_fingerprint requires the pyfory-rebuild "
+                "checkpoint backend.")
     if not isinstance(options["checkpoint_structural_cfg"], dict):
         raise RuntimeError(
             "options['checkpoint_structural_cfg'] must be a dict of stable "
@@ -258,8 +299,826 @@ def _leaf_filename(rank):
     return f"hub_rank_{rank:04d}.pkl"
 
 
-def _model_filename(rank, sname):
-    return f"hub_rank_{rank:04d}_scen_{sanitize_for_filename(sname)}.dill"
+def _model_filename(rank, sname, backend=DILL_RELOAD_BACKEND):
+    suffix = {
+        DILL_RELOAD_BACKEND: "dill",
+        PYFORY_REBUILD_BACKEND: "fory",
+    }.get(backend)
+    if suffix is None:
+        raise ValueError(f"Unknown checkpoint backend '{backend}'.")
+    return (f"hub_rank_{rank:04d}_scen_"
+            f"{sanitize_for_filename(sname)}.{suffix}")
+
+
+def _nl_fingerprint_filename(rank, sname):
+    return (f"hub_rank_{rank:04d}_scen_"
+            f"{sanitize_for_filename(sname)}.nl.sha256")
+
+
+def require_backend_dependency(backend):
+    """Check the optional codec needed by a hub checkpoint backend."""
+    if backend == DILL_RELOAD_BACKEND:
+        if not dill_available:
+            raise RuntimeError(
+                f"The '{backend}' checkpoint backend requires dill, which is not "
+                "installed. Install the optional dependencies with "
+                "'pip install mpi-sppy[extras]' (or 'pip install dill'), or "
+                "choose a different --checkpoint-backend."
+            )
+    elif _is_pyfory_backend(backend):
+        if not pyfory_available:
+            raise RuntimeError(
+                f"The '{backend}' checkpoint backend requires pyfory, which is not "
+                "installed. Install it with 'pip install mpi-sppy[extras]' "
+                "or choose a different --checkpoint-backend."
+            )
+        from packaging.version import InvalidVersion, Version
+
+        installed_version = _pyfory_version()
+        try:
+            parsed_version = Version(installed_version)
+        except InvalidVersion as exc:
+            raise RuntimeError(
+                f"The '{backend}' checkpoint backend cannot determine the "
+                f"installed pyfory version ({installed_version!r})."
+            ) from exc
+        if parsed_version < Version(PYFORY_MIN_VERSION):
+            raise RuntimeError(
+                f"The '{backend}' checkpoint backend requires pyfory "
+                f">={PYFORY_MIN_VERSION}, but this run has pyfory "
+                f"{installed_version}. Install a supported version with "
+                "'pip install mpi-sppy[extras]'."
+            )
+    else:
+        require_implemented_backend(backend)
+
+
+def _new_fory():
+    """Return an independently usable Python-native codec for state data."""
+    require_backend_dependency(PYFORY_REBUILD_BACKEND)
+    return pyfory.Fory(
+        xlang=False,
+        ref=True,
+        strict=False,
+        max_depth=PYFORY_MAX_DEPTH,
+        max_graph_memory_bytes=PYFORY_MAX_GRAPH_MEMORY_BYTES,
+    )
+
+
+def _new_rebuild_codec(backend):
+    """Return a fresh snapshot codec with serialize, deserialize, and dump."""
+    if backend == PYFORY_REBUILD_BACKEND:
+        return _new_fory()
+    raise ValueError(f"Unknown rebuild backend '{backend}'.")
+
+
+def _codec_version(backend):
+    """Return the version recorded for a backend's model-file codec."""
+    if _is_pyfory_backend(backend):
+        return _pyfory_version()
+    raise ValueError(f"Backend '{backend}' has no versioned model codec.")
+
+
+_CHECKPOINT_SCALAR_TAG = "__mpisppy_checkpoint_scalar__"
+
+
+def _plain_checkpoint_value(value, context=None):
+    """Convert a Pyomo/NumPy scalar to a bounded pyfory-native value.
+
+    ``context`` identifies the scenario/component/index at the call site so
+    unsupported model values can be fixed without tracing a generic type
+    error back through a large scenario creator.
+    """
+    if hasattr(value, "item") and callable(value.item):
+        value = value.item()
+    if isinstance(value, Decimal):
+        # Preserve exact decimal values without relying on codec-specific
+        # support for Decimal itself.
+        return {_CHECKPOINT_SCALAR_TAG: "decimal", "value": str(value)}
+    if (isinstance(value, dict)
+            and value.get(_CHECKPOINT_SCALAR_TAG) == "decimal"
+            and set(value) == {_CHECKPOINT_SCALAR_TAG, "value"}
+            and isinstance(value["value"], str)):
+        # _snapshot_rebuild_model prepares scalar metadata before the packed
+        # value arrays call this helper a second time.
+        return value
+    if value is None or isinstance(value, (bool, int, float, str, bytes)):
+        return value
+    if isinstance(value, numbers.Real):
+        return float(value)
+    location = f" at {context}" if context else ""
+    raise TypeError(
+        f"Checkpoint state{location} contains unsupported value type "
+        f"'{type(value).__module__}.{type(value).__qualname__}'."
+    )
+
+
+def _restore_plain_checkpoint_value(value):
+    """Decode the explicit scalar tags emitted by _plain_checkpoint_value."""
+    if (isinstance(value, dict)
+            and _CHECKPOINT_SCALAR_TAG in value):
+        if (value.get(_CHECKPOINT_SCALAR_TAG) != "decimal"
+                or set(value) != {_CHECKPOINT_SCALAR_TAG, "value"}
+                or not isinstance(value["value"], str)):
+            raise CheckpointMismatch(
+                "A pyfory checkpoint has an invalid tagged scalar value.")
+        try:
+            return Decimal(value["value"])
+        except (TypeError, ValueError, InvalidOperation) as exc:
+            raise CheckpointMismatch(
+                "A pyfory checkpoint has an invalid tagged Decimal value."
+            ) from exc
+    return value
+
+
+def _pack_checkpoint_values(values):
+    """Pack homogeneous numeric snapshot data into bounded NumPy arrays.
+
+    Most scenario state is numeric. Keeping those values in arrays avoids a
+    Python object and pyfory graph entry for every variable or mutable Param,
+    while the kind and overflow side tables retain None, integer, and less
+    common nonnumeric values without silently coercing them.
+    """
+    values = [_plain_checkpoint_value(value) for value in values]
+    kinds = np.zeros(len(values), dtype=np.uint8)
+    integers = np.zeros(len(values), dtype=np.int64)
+    reals = np.zeros(len(values), dtype=np.float64)
+    others = {}
+    int_info = np.iinfo(np.int64)
+    for index, value in enumerate(values):
+        if value is None:
+            continue
+        if isinstance(value, bool):
+            # Keep the Python type: a mutable Param may use a Boolean value
+            # in model logic, where 1 and True are not interchangeable.
+            kinds[index] = 3
+            others[index] = value
+        elif isinstance(value, int):
+            if int_info.min <= value <= int_info.max:
+                kinds[index] = 1
+                integers[index] = value
+            else:
+                kinds[index] = 3
+                others[index] = value
+        elif isinstance(value, numbers.Real):
+            kinds[index] = 2
+            reals[index] = float(value)
+        else:
+            kinds[index] = 3
+            others[index] = value
+    return {
+        "kinds": kinds,
+        "integers": integers,
+        "reals": reals,
+        "others": others,
+    }
+
+
+def _unpack_checkpoint_value(packed, index):
+    """Read one value from :func:`_pack_checkpoint_values`."""
+    try:
+        kind = int(packed["kinds"][index])
+        if kind == 0:
+            return None
+        if kind == 1:
+            return int(packed["integers"][index])
+        if kind == 2:
+            return float(packed["reals"][index])
+        if kind == 3 and index in packed["others"]:
+            return _restore_plain_checkpoint_value(packed["others"][index])
+    except (IndexError, KeyError, TypeError, ValueError) as exc:
+        raise CheckpointMismatch(
+            "A pyfory checkpoint has a malformed packed value array."
+        ) from exc
+    raise CheckpointMismatch(
+        "A pyfory checkpoint has an unknown packed value kind."
+    )
+
+
+def _checkpoint_state_equal(left, right):
+    """Compare a plain snapshot recursively, including NumPy arrays."""
+    if isinstance(left, np.ndarray) or isinstance(right, np.ndarray):
+        return (isinstance(left, np.ndarray)
+                and isinstance(right, np.ndarray)
+                and left.dtype == right.dtype
+                and left.shape == right.shape
+                and np.array_equal(left, right, equal_nan=True))
+    if isinstance(left, dict) or isinstance(right, dict):
+        return (isinstance(left, dict) and isinstance(right, dict)
+                and left.keys() == right.keys()
+                and all(_checkpoint_state_equal(left[key], right[key])
+                        for key in left))
+    if isinstance(left, (list, tuple)) or isinstance(right, (list, tuple)):
+        return (type(left) is type(right) and len(left) == len(right)
+                and all(_checkpoint_state_equal(a, b)
+                        for a, b in zip(left, right)))
+    return left == right
+
+
+def _safe_index(index, context=None):
+    """Convert a Pyomo index into plain data without losing tuple geometry."""
+    if index is None:
+        return None
+    if isinstance(index, tuple):
+        return tuple(_safe_index(part, context) for part in index)
+    if isinstance(index, (bool, int, float, str, bytes)):
+        return index
+    if hasattr(index, "item") and callable(index.item):
+        return _safe_index(index.item(), context)
+    location = f" at {context}" if context else ""
+    raise TypeError(
+        f"Checkpoint index {index!r}{location} has unsupported type "
+        f"'{type(index).__module__}.{type(index).__qualname__}'."
+    )
+
+
+def _component_layout(scenario):
+    """Describe model structure that scenario_creator/extensions rebuild."""
+    from pyomo.environ import Constraint
+
+    layout = []
+    for component in scenario.component_objects(descend_into=True,
+                                                active=None):
+        try:
+            size = len(component)
+        except TypeError:
+            size = 1
+        layout.append((
+            component.name,
+            type(component).__module__,
+            type(component).__qualname__,
+            int(size),
+            bool(component.active),
+            tuple(sorted(data.name for data in component.values()
+                         if not data.active))
+            if isinstance(component, Constraint) else (),
+        ))
+    return sorted(layout)
+
+
+def _prox_cut_owner_and_index(key):
+    """Split either Pyomo tuple-key form into a manager key and cut index."""
+    if not isinstance(key, tuple) or len(key) < 2:
+        return None
+    if len(key) == 2 and isinstance(key[0], tuple):
+        return tuple(key[0]), int(key[1])
+    return tuple(key[:-1]), int(key[-1])
+
+
+def _prox_approx_snapshot(scenario):
+    """Store PH's proximal cuts and their manager bookkeeping."""
+    managers = getattr(scenario._mpisppy_data, "xsqvar_prox_approx", False)
+    if not managers:
+        return None
+    cuts = scenario._mpisppy_model.xsqvar_cuts
+    cuts_by_manager = {}
+    for key, cut in cuts.items():
+        owner_and_index = _prox_cut_owner_and_index(key)
+        if owner_and_index is not None:
+            owner, index = owner_and_index
+            cuts_by_manager.setdefault(owner, []).append((index, cut))
+    result = {}
+    for manager in managers.values():
+        var_name = manager.xvar.name
+        manager_cuts = cuts_by_manager.get(tuple(manager.var_index), ())
+        if manager.xvar.is_integer():
+            result[var_name] = {
+                "kind": "discrete",
+                "cut_indices": sorted(index for index, _ in manager_cuts),
+            }
+        else:
+            from pyomo.core.expr.numeric_expr import LinearExpression
+            from pyomo.environ import value as pyo_value
+
+            cut_records = []
+            for index, cut in manager_cuts:
+                body = cut.body
+                if not isinstance(body, LinearExpression):
+                    raise TypeError(
+                        f"Proximal cut '{cut.name}' is not linear and cannot "
+                        "be saved by pyfory-rebuild."
+                    )
+                variables = body.linear_vars
+                if (len(variables) != 2
+                        or variables[0] is not manager.xvarsqrd
+                        or variables[1] is not manager.xvar):
+                    raise TypeError(
+                        f"Proximal cut '{cut.name}' has unexpected variables "
+                        "and cannot be saved by pyfory-rebuild."
+                    )
+                coefs = body.linear_coefs
+                cut_records.append((
+                    index,
+                    _plain_checkpoint_value(coefs[0], cut.name),
+                    _plain_checkpoint_value(coefs[1], cut.name),
+                    _plain_checkpoint_value(body.constant, cut.name),
+                    _plain_checkpoint_value(
+                        pyo_value(cut.lower, exception=False),
+                        f"scenario '{scenario.name}', proximal cut "
+                        f"'{cut.name}' lower bound"),
+                    _plain_checkpoint_value(
+                        pyo_value(cut.upper, exception=False),
+                        f"scenario '{scenario.name}', proximal cut "
+                        f"'{cut.name}' upper bound"),
+                    bool(cut.active),
+                ))
+            result[var_name] = {
+                "kind": "continuous",
+                # 0.0 is the manager's initial duplicate-suppression marker;
+                # the corresponding epigraph lower bound is xsqvar >= 0.
+                "cut_values": [float(value)
+                               for value in manager.cut_values
+                               if float(value) != 0.0],
+                "cut_index": int(manager.cut_index),
+                "cut_records": sorted(cut_records),
+            }
+    return result
+
+
+def _snapshot_rebuild_model(scenario):
+    """Capture plain PH/scenario state for a rebuild backend.
+
+    The scenario structure is rebuilt from the creator and approved extension
+    hooks. Variable values/fixedness, mutable Params, and proximal cuts are
+    overlaid by stable component names and indices. Solver result flags and
+    bounds are saved separately so resume hooks see the completed iterate.
+    """
+    from pyomo.environ import Param, Var
+    from pyomo.environ import value as pyo_value
+
+    variables = []
+    variable_values = []
+    for var in scenario.component_data_objects(Var, descend_into=True,
+                                               active=None):
+        value = _plain_checkpoint_value(
+            var.value,
+            f"scenario '{scenario.name}', variable '{var.name}' value")
+        lb_value = pyo_value(var.lb, exception=False)
+        ub_value = pyo_value(var.ub, exception=False)
+        lb = (None if lb_value is None else _plain_checkpoint_value(
+            lb_value,
+            f"scenario '{scenario.name}', variable '{var.name}' lower bound"))
+        ub = (None if ub_value is None else _plain_checkpoint_value(
+            ub_value,
+            f"scenario '{scenario.name}', variable '{var.name}' upper bound"))
+        domain_name = getattr(var.domain, "name", None)
+        if domain_name is None:
+            raise TypeError(
+                f"Variable '{var.name}' has a domain without a stable name; "
+                "pyfory-rebuild cannot save it."
+            )
+        variables.append((
+            var.name, bool(var.fixed), bool(var.stale), lb, ub,
+            str(domain_name),
+        ))
+        variable_values.append(value)
+
+    parameters = []
+    parameter_values = []
+    for component in scenario.component_objects(Param, descend_into=True,
+                                                active=None):
+        if not component.mutable:
+            continue
+        for index, param in component.items():
+            safe_index = _safe_index(
+                index,
+                f"scenario '{scenario.name}', mutable Param "
+                f"'{component.name}' index")
+            parameters.append((component.name, safe_index))
+            parameter_values.append(_plain_checkpoint_value(
+                param.value,
+                f"scenario '{scenario.name}', mutable Param "
+                f"'{component.name}' index {safe_index!r}"))
+
+    return {
+        "state_version": REBUILD_STATE_VERSION,
+        "scenario_name": str(scenario.name),
+        "component_layout": _component_layout(scenario),
+        "variables": variables,
+        "variable_values": _pack_checkpoint_values(variable_values),
+        "mutable_params": parameters,
+        "mutable_param_values": _pack_checkpoint_values(parameter_values),
+        "prox_approx": _prox_approx_snapshot(scenario),
+        # The startup probe runs before the first solve, when this flag has
+        # not yet been created on a fresh scenario.
+        "solution_available": bool(getattr(
+            scenario._mpisppy_data, "solution_available", False)),
+        "inner_bound": _plain_checkpoint_value(
+            scenario._mpisppy_data.inner_bound,
+            f"scenario '{scenario.name}' inner bound"),
+        "outer_bound": _plain_checkpoint_value(
+            scenario._mpisppy_data.outer_bound,
+            f"scenario '{scenario.name}' outer bound"),
+    }
+
+
+class _HashingTextStream(io.TextIOBase):
+    """Hash UTF-8 text as an NL writer emits it, without retaining the file."""
+
+    def __init__(self):
+        self._hasher = hashlib.sha256()
+
+    def write(self, text):
+        if not isinstance(text, str):
+            raise TypeError("NLWriter must write text")
+        self._hasher.update(text.encode("utf-8"))
+        return len(text)
+
+    def tell(self):
+        raise io.UnsupportedOperation("tell")
+
+    def writable(self):
+        return True
+
+    def flush(self):
+        return None
+
+    def digest(self):
+        return self._hasher.hexdigest()
+
+
+def _rebuild_model_nl_fingerprint(scenario):
+    """Hash Pyomo's deterministic NL text for the active scenario model."""
+    from pyomo.repn.plugins.nl_writer import FileDeterminism, NLWriter
+
+    stream = _HashingTextStream()
+    NLWriter().write(
+        scenario,
+        stream,
+        file_determinism=FileDeterminism.SORT_SYMBOLS,
+        symbolic_solver_labels=True,
+        linear_presolve=False,
+        skip_trivial_constraints=False,
+        show_section_timing=False,
+        scale_model=True,
+        export_nonlinear_variables=None,
+        row_order=None,
+        column_order=None,
+        export_defined_variables=True,
+    )
+    return stream.digest()
+
+
+def validate_rebuild_model_state(
+        opt, snapshots, fingerprint_method=None,
+        nl_fingerprints=None):
+    """Check the restored state and any requested NL formulation digest."""
+    if fingerprint_method not in (None, NL_FINGERPRINT_METHOD):
+        raise CheckpointMismatch(
+            f"The pyfory-rebuild checkpoint has unsupported model "
+            f"fingerprint method {fingerprint_method!r}.")
+    for sname, scenario in opt.local_scenarios.items():
+        snapshot = snapshots[sname]
+        if fingerprint_method == NL_FINGERPRINT_METHOD:
+            expected = (nl_fingerprints or {}).get(sname)
+            if not isinstance(expected, str) or not re.fullmatch(
+                    r"[0-9a-f]{64}", expected):
+                raise CheckpointMismatch(
+                    f"The pyfory-rebuild checkpoint for scenario "
+                    f"'{sname}' has no valid NL fingerprint.")
+            actual = _rebuild_model_nl_fingerprint(scenario)
+            if actual != expected:
+                raise CheckpointMismatch(
+                    f"The rebuilt NL formulation for scenario '{sname}' "
+                    f"does not match its checkpoint fingerprint "
+                    f"(expected {expected}, got {actual}).")
+        saved_state = snapshot
+        current_state = _snapshot_rebuild_model(scenario)
+        state_matches = _checkpoint_state_equal(saved_state, current_state)
+        if not state_matches:
+            section = next((key for key in sorted(
+                saved_state.keys() | current_state.keys())
+                if key not in saved_state or key not in current_state or
+                not _checkpoint_state_equal(saved_state[key],
+                                            current_state[key])), "unknown")
+            raise CheckpointMismatch(
+                f"The rebuilt state for scenario '{sname}' does not "
+                f"match its pyfory-rebuild checkpoint snapshot "
+                f"({section}).")
+
+
+def finalize_and_validate_rebuild_model_state(
+        opt, snapshots, fingerprint_method=None,
+        nl_fingerprints=None):
+    """Restore Pyomo's stale flags after setup, then check the rebuilt model."""
+    for sname, scenario in opt.local_scenarios.items():
+        for name, _, stale, _, _, _ in snapshots[sname]["variables"]:
+            var = scenario.find_component(name)
+            if var is None:
+                raise CheckpointMismatch(
+                    f"The rebuilt scenario '{sname}' has no variable '{name}'.")
+            var.stale = stale
+    validate_rebuild_model_state(
+        opt, snapshots, fingerprint_method=fingerprint_method,
+        nl_fingerprints=nl_fingerprints)
+
+
+def restore_rebuild_solve_state(opt, snapshots):
+    """Restore solve results before extensions run their resume callbacks."""
+    for sname, scenario in opt.local_scenarios.items():
+        snapshot = snapshots[sname]
+        if snapshot.get("scenario_name") != str(scenario.name):
+            raise CheckpointMismatch(
+                f"The pyfory state belongs to scenario "
+                f"'{snapshot.get('scenario_name')}', not '{scenario.name}'."
+            )
+        solve_keys = {"solution_available", "inner_bound", "outer_bound"}
+        missing = sorted(solve_keys - snapshot.keys())
+        if missing:
+            raise CheckpointMismatch(
+                f"The pyfory state for scenario '{sname}' has no "
+                f"{', '.join(missing)}."
+            )
+        if not isinstance(snapshot["solution_available"], bool):
+            raise CheckpointMismatch(
+                f"The pyfory state for scenario '{sname}' has an invalid "
+                "solution_available flag."
+            )
+        for key in ("inner_bound", "outer_bound"):
+            bound = _restore_plain_checkpoint_value(snapshot[key])
+            if bound is not None and (isinstance(bound, bool)
+                                      or not isinstance(
+                                          bound, (numbers.Real, Decimal))):
+                raise CheckpointMismatch(
+                    f"The pyfory state for scenario '{sname}' has an "
+                    f"invalid {key}."
+                )
+        data = scenario._mpisppy_data
+        data.solution_available = snapshot["solution_available"]
+        data.inner_bound = _restore_plain_checkpoint_value(
+            snapshot["inner_bound"])
+        data.outer_bound = _restore_plain_checkpoint_value(
+            snapshot["outer_bound"])
+
+
+def _restore_rebuild_model_values(scenario, snapshot):
+    """Overlay saved values onto an already rebuilt scenario model."""
+    import pyomo.environ as pyo
+    from pyomo.environ import (
+        Binary,
+        Integers,
+        NonNegativeIntegers,
+        NonNegativeReals,
+        NonPositiveIntegers,
+        NonPositiveReals,
+        Reals,
+        UnitInterval,
+    )
+
+    if snapshot.get("state_version") != REBUILD_STATE_VERSION:
+        raise CheckpointMismatch(
+            f"Scenario '{scenario.name}' has rebuild state version "
+            f"{snapshot.get('state_version')!r}; this mpi-sppy reads "
+            f"version {REBUILD_STATE_VERSION}."
+        )
+    if snapshot.get("scenario_name") != str(scenario.name):
+        raise CheckpointMismatch(
+            f"The pyfory state belongs to scenario "
+            f"'{snapshot.get('scenario_name')}', not '{scenario.name}'."
+        )
+
+    builtin_domains = {
+        obj.name: obj for obj in (
+            Binary, Integers, NonNegativeIntegers, NonNegativeReals,
+            NonPositiveIntegers, NonPositiveReals, Reals, UnitInterval,
+        )
+    }
+    for name in ("Any", "EmptySet", "NegativeIntegers", "NegativeReals",
+                 "PositiveIntegers", "PositiveReals", "PercentFraction"):
+        domain = getattr(pyo, name, None)
+        if domain is not None and getattr(domain, "name", None) == name:
+            builtin_domains[name] = domain
+
+    # Restore mutable Params first. Bound expressions that refer to them then
+    # regain their checkpoint values without being replaced by constants.
+    params = snapshot["mutable_params"]
+    packed_params = snapshot["mutable_param_values"]
+    if len(packed_params.get("kinds", ())) != len(params):
+        raise CheckpointMismatch(
+            f"The pyfory checkpoint for scenario '{scenario.name}' has "
+            "inconsistent mutable-parameter state."
+        )
+    for index_in_snapshot, (component_name, index) in enumerate(params):
+        value = _unpack_checkpoint_value(packed_params, index_in_snapshot)
+        component = scenario.find_component(component_name)
+        if component is None:
+            raise CheckpointMismatch(
+                f"The rebuilt scenario '{scenario.name}' has no mutable "
+                f"parameter component '{component_name}' recorded by its "
+                "pyfory checkpoint."
+            )
+        try:
+            component[index] = value
+        except (KeyError, IndexError, TypeError) as exc:
+            raise CheckpointMismatch(
+                f"The rebuilt scenario '{scenario.name}' has no parameter "
+                f"index {index!r} in '{component_name}'."
+            ) from exc
+
+    pending_variables = {}
+    variable_records = snapshot["variables"]
+    packed_variables = snapshot["variable_values"]
+    if len(packed_variables.get("kinds", ())) != len(variable_records):
+        raise CheckpointMismatch(
+            f"The pyfory checkpoint for scenario '{scenario.name}' has "
+            "inconsistent variable state."
+        )
+    for index_in_snapshot, (name, fixed, stale, lb, ub, domain_name) in \
+            enumerate(variable_records):
+        value = _unpack_checkpoint_value(packed_variables, index_in_snapshot)
+        lb = _restore_plain_checkpoint_value(lb)
+        ub = _restore_plain_checkpoint_value(ub)
+        var = scenario.find_component(name)
+        if var is None:
+            # PH's xsqvar is introduced when the deferred PH objective is
+            # attached at the end of Iter0. Its value is applied after that.
+            if name.startswith("_mpisppy_model.xsqvar["):
+                pending_variables[name] = (value, fixed, stale, lb, ub,
+                                           domain_name)
+                continue
+            raise CheckpointMismatch(
+                f"The rebuilt scenario '{scenario.name}' has no variable "
+                f"'{name}' recorded by its pyfory checkpoint."
+            )
+        domain = builtin_domains.get(domain_name)
+        if domain is None:
+            domain = scenario.find_component(domain_name)
+        if domain is None:
+            raise CheckpointMismatch(
+                f"The rebuilt scenario '{scenario.name}' has no variable "
+                f"domain '{domain_name}' required by '{name}'."
+            )
+        var.domain = domain
+        current_lb = pyo.value(var.lb, exception=False)
+        current_ub = pyo.value(var.ub, exception=False)
+        if current_lb != lb:
+            var.setlb(lb)
+        if current_ub != ub:
+            var.setub(ub)
+        if fixed:
+            var.fix(value)
+        else:
+            var.unfix()
+            var.set_value(value, skip_validation=True)
+        var.stale = stale
+
+    return pending_variables
+
+
+def _replay_prox_approx(opt, scenario, snapshot):
+    """Recreate saved proximal cuts and manager bookkeeping."""
+    prox = snapshot["prox_approx"]
+    if not prox:
+        return {}
+    from pyomo.core.expr.numeric_expr import LinearExpression
+
+    from mpisppy.utils.sputils import is_persistent
+
+    managers = getattr(scenario._mpisppy_data, "xsqvar_prox_approx", {})
+    by_name = {manager.xvar.name: manager
+               for manager in managers.values()}
+    pending = {}
+    for var_name, state in prox.items():
+        manager = by_name.get(var_name)
+        if manager is None:
+            raise CheckpointMismatch(
+                f"The rebuilt scenario '{scenario.name}' has no proximal "
+                f"manager for '{var_name}'."
+            )
+        persistent = (scenario._solver_plugin
+                      if hasattr(scenario, "_solver_plugin")
+                      and is_persistent(scenario._solver_plugin) else None)
+        if state["kind"] == "continuous":
+            # A saved cut may now lie outside bounds tightened after it was
+            # created. add_cut() would clamp it and change the saved model.
+            for index, coef_square, coef_x, constant, lower, upper, active \
+                    in state["cut_records"]:
+                coef_square = _restore_plain_checkpoint_value(coef_square)
+                coef_x = _restore_plain_checkpoint_value(coef_x)
+                constant = _restore_plain_checkpoint_value(constant)
+                lower = _restore_plain_checkpoint_value(lower)
+                upper = _restore_plain_checkpoint_value(upper)
+                # ProxApproxManagerContinuous creates these cuts with an
+                # integer zero. Pyomo's cut.lower presents it as 0.0; use
+                # the original expression constant when replaying the cut.
+                if lower == 0 and upper is None:
+                    lower = 0
+                expr = LinearExpression(
+                    linear_coefs=[coef_square, coef_x],
+                    linear_vars=[manager.xvarsqrd, manager.xvar],
+                    constant=constant,
+                )
+                manager.cuts[manager.var_index, int(index)] = \
+                    (lower, expr, upper)
+                cut = manager.cuts[manager.var_index, int(index)]
+                if not active:
+                    cut.deactivate()
+                elif persistent is not None:
+                    persistent.add_constraint(cut)
+            manager.cut_values = array(
+                "d", sorted([0.0] + [float(value)
+                                   for value in state["cut_values"]]))
+            manager.cut_index = int(state["cut_index"])
+        elif state["kind"] == "discrete":
+            for index in state["cut_indices"]:
+                left = int(index) - 1
+                slope = 2 * left + 1
+                constant = -left * (left + 1)
+                expr = LinearExpression(
+                    linear_coefs=[1, -slope],
+                    linear_vars=[manager.xvarsqrd, manager.xvar],
+                    constant=-constant,
+                )
+                manager.cuts[manager.var_index, int(index)] = \
+                    (0, expr, None)
+                if persistent is not None:
+                    persistent.add_constraint(
+                        manager.cuts[manager.var_index, int(index)])
+        else:
+            raise CheckpointMismatch(
+                f"Unknown proximal cut state '{state.get('kind')}'."
+            )
+    return pending
+
+
+def restore_rebuild_model_state(opt, snapshots, pending=None):
+    """Finish applying model snapshots after deferred PH terms are attached."""
+    pending = pending or {}
+    for sname, scenario in opt.local_scenarios.items():
+        snapshot = snapshots[sname]
+        for name, state in pending.get(sname, {}).items():
+            var = scenario.find_component(name)
+            if var is None:
+                raise CheckpointMismatch(
+                    f"The rebuilt scenario '{sname}' has no deferred variable "
+                    f"'{name}'."
+                )
+            value, fixed, stale, lb, ub, domain_name = state
+            if fixed:
+                var.fix(value)
+            else:
+                var.set_value(value, skip_validation=True)
+            var.setlb(lb)
+            var.setub(ub)
+            var.stale = stale
+        _replay_prox_approx(opt, scenario, snapshot)
+        if _component_layout(scenario) != snapshot["component_layout"]:
+            raise CheckpointMismatch(
+                f"The rebuilt scenario '{sname}' does not have the same "
+                "component structure as its pyfory checkpoint. An extension "
+                "may not have rebuilt model changes made during the saved run."
+            )
+
+
+def gather_extension_model_state(opt):
+    """Save model changes owned by extensions that opted into rebuilds."""
+    state = {}
+    for name, extension in _extension_objects(opt):
+        if not getattr(extension, "checkpoint_rebuild_safe", False):
+            raise RuntimeError(
+                f"Extension '{name}' has not declared support for the "
+                "pyfory-rebuild backend. Add a checkpoint model-state "
+                "rebuild contract or use dill-reload."
+            )
+        model_state = extension.checkpoint_model_state()
+        # A writer always has a Checkpointer, but a direct PH read-only resume
+        # need not attach one. It adds no model structure or model state.
+        if name != "Checkpointer":
+            state[name] = model_state
+    return state
+
+
+def restore_extension_model_state(opt, state):
+    """Let opted-in extensions rebuild model additions before state overlay."""
+    require_extension_rebuild_contract(opt)
+    if not isinstance(state, dict):
+        raise CheckpointMismatch(
+            "The pyfory checkpoint has invalid extension model state."
+        )
+    attached = dict(_extension_objects(opt))
+    unexpected = set(state) - set(attached)
+    if unexpected:
+        raise CheckpointMismatch(
+            "The pyfory checkpoint contains model state for unattached "
+            f"extension(s): {', '.join(sorted(unexpected))}."
+        )
+    for name, extension in attached.items():
+        if not getattr(extension, "checkpoint_rebuild_safe", False):
+            raise CheckpointMismatch(
+                f"Extension '{name}' has not declared support for the "
+                "pyfory-rebuild backend."
+            )
+        extension.restore_checkpoint_model_state(state.get(name))
+
+
+def prepare_rebuild_model_state(opt, snapshots, extension_state):
+    """Recreate extension structure and overlay saved values before solvers."""
+    restore_extension_model_state(opt, extension_state)
+    pending = {}
+    for sname, scenario in opt.local_scenarios.items():
+        pending[sname] = _restore_rebuild_model_values(
+            scenario, snapshots[sname])
+    return pending
 
 
 _SPOKE_FILE_RE = re.compile(r"^spoke_(.+)_ordinal_(\d+)_rank_\d+\.pkl$")
@@ -576,10 +1435,11 @@ def require_implemented_backend(backend):
     branch in PHBase), because a resume need not have a Checkpointer
     attached.
     """
-    if backend != DILL_RELOAD_BACKEND:
+    if backend not in (DILL_RELOAD_BACKEND, PYFORY_REBUILD_BACKEND):
         raise RuntimeError(
             f"--checkpoint-backend '{backend}' is not implemented. "
-            f"The only supported backend is '{DILL_RELOAD_BACKEND}'."
+            f"Supported backends are '{DILL_RELOAD_BACKEND}' "
+            f"and '{PYFORY_REBUILD_BACKEND}'."
         )
 
 def agree_spoke_restore(opt, state):
@@ -678,13 +1538,30 @@ def agree_dual_spoke_restore(opt, state):
 
 
 def require_dill(backend):
-    if backend == DILL_RELOAD_BACKEND and not dill_available:
-        raise RuntimeError(
-            f"The '{backend}' checkpoint backend requires dill, which is not "
-            "installed. Install the optional dependencies with "
-            "'pip install mpi-sppy[extras]' (or 'pip install dill'), or "
-            "choose a different --checkpoint-backend."
-        )
+    """Backward-compatible name for the backend dependency check."""
+    if backend == DILL_RELOAD_BACKEND:
+        require_backend_dependency(backend)
+
+
+def require_extension_rebuild_contract(opt):
+    """Refuse extensions that cannot recreate their changes on fresh models."""
+    from mpisppy.extensions.extension import Extension
+
+    for name, extension in _extension_objects(opt):
+        if not getattr(extension, "checkpoint_rebuild_safe", False):
+            raise RuntimeError(
+                f"Extension '{name}' has not declared support for the "
+                "pyfory-rebuild backend. Add a checkpoint model-state "
+                "rebuild contract or use dill-reload."
+            )
+        cls = type(extension)
+        if (cls.checkpoint_model_state is Extension.checkpoint_model_state
+                or cls.restore_checkpoint_model_state
+                is Extension.restore_checkpoint_model_state):
+            raise RuntimeError(
+                f"Extension '{name}' declares pyfory-rebuild support but "
+                "does not implement both checkpoint model-state hooks."
+            )
 
 
 
@@ -785,6 +1662,125 @@ def probe_model_is_dillable(opt):
         f"Checkpointing is enabled, but no checkpoint could ever be written: "
         f"rank {failing_rank} has a scenario model that cannot be "
         f"serialized. See that rank's message for which one and why."
+    )
+
+
+def _clone_rebuild_probe_model(scenario):
+    """Clone a configured model for the rebuild probe without losing Sets.
+
+    Pyomo cannot deepcopy a Set initialized from a dict_keys view: clone()
+    logs an error and silently drops that Set's initializer. Supply a
+    snapshot of the view through the deepcopy memo for this probe clone only.
+    The live scenario and the checkpoint format remain unchanged.
+    """
+    from pyomo.environ import Set
+
+    memo = {}
+    for component in scenario.component_objects(Set, active=None,
+                                                descend_into=True):
+        initializer = getattr(getattr(component, "_init_values", None),
+                              "_init", None)
+        values = getattr(initializer, "val", None)
+        if isinstance(values, KeysView):
+            memo[id(values)] = tuple(values)
+    return scenario.clone(memo=memo)
+
+
+def probe_model_checkpointable(opt, backend=DILL_RELOAD_BACKEND):
+    """Probe each local model codec before the run starts writing.
+
+    For pyfory-rebuild, check that the snapshot survives a codec round trip.
+    With NL validation enabled, also check its overlay on a model clone.
+    This does not prove that future extension behavior is captured; rebuild
+    hooks are checked for encodable state here and their component layout is
+    checked on resume.
+    """
+    require_backend_dependency(backend)
+    if backend == DILL_RELOAD_BACKEND:
+        # Keep dill's serialize-only probe exactly as it has always worked.
+        return probe_model_is_dillable(opt)
+    if not _is_rebuild_backend(backend):
+        raise ValueError(f"Unknown checkpoint backend '{backend}'.")
+
+    use_nl_fingerprint = bool(opt.options.get(
+        "checkpoint_nl_fingerprint", False))
+    failure = None
+    extension_state = {}
+    try:
+        require_extension_rebuild_contract(opt)
+        extension_state = gather_extension_model_state(opt)
+    except Exception as exc:
+        failure = RuntimeError(
+            "Checkpointing is enabled, but pyfory-rebuild cannot gather "
+            f"extension model state: {type(exc).__name__}: {exc}")
+        failure.__cause__ = exc
+    for extension_name, model_state in extension_state.items():
+        try:
+            hook_payload = {extension_name: model_state}
+            hook_bytes = _new_rebuild_codec(backend).serialize(hook_payload)
+            hook_restored = _new_rebuild_codec(backend).deserialize(hook_bytes)
+            if not _checkpoint_state_equal(hook_restored, hook_payload):
+                raise RuntimeError(
+                    "pyfory changed model state during a fresh-reader "
+                    "round trip")
+        except Exception as exc:
+            failure = RuntimeError(
+                "Checkpointing is enabled, but pyfory-rebuild cannot encode "
+                f"model state from extension '{extension_name}': "
+                f"{type(exc).__name__}: {exc}")
+            failure.__cause__ = exc
+            break
+
+    for sname, scenario in opt.local_scenarios.items():
+        if failure is not None:
+            break
+        try:
+            state = _snapshot_rebuild_model(scenario)
+            payload = _new_rebuild_codec(backend).serialize(state)
+            restored = _new_rebuild_codec(backend).deserialize(payload)
+            if not _checkpoint_state_equal(restored, state):
+                raise RuntimeError(
+                    "pyfory changed the plain scenario state during a "
+                    "fresh-reader round trip")
+
+            if use_nl_fingerprint:
+                # Pyomo's clone is the closest safe startup check for the
+                # overlay: extension hooks may add structure, so the clone
+                # begins with the same configured structure as the scenario.
+                clone = _clone_rebuild_probe_model(scenario)
+                _restore_rebuild_model_values(clone, restored)
+                clone_state = _snapshot_rebuild_model(clone)
+                if not _checkpoint_state_equal(clone_state, restored):
+                    raise RuntimeError(
+                        "the decoded snapshot could not be overlaid on a "
+                        "clone of the configured scenario")
+                original_fingerprint = _rebuild_model_nl_fingerprint(scenario)
+                clone_fingerprint = _rebuild_model_nl_fingerprint(clone)
+                if clone_fingerprint != original_fingerprint:
+                    raise RuntimeError(
+                        "the decoded snapshot changed the NL fingerprint "
+                        "when overlaid on a clone")
+        except Exception as exc:
+            failure_reason = ("write its NL fingerprint for" if
+                              use_nl_fingerprint else "encode")
+            failure = RuntimeError(
+                "Checkpointing is enabled, but pyfory-rebuild cannot "
+                f"{failure_reason} "
+                f"scenario '{sname}': {type(exc).__name__}: {exc}"
+            )
+            failure.__cause__ = exc
+            break
+
+    comm = _cylinder_comm(opt)
+    failing_rank = _first_failing_rank(comm, int(opt.cylinder_rank),
+                                       failure is not None)
+    if failing_rank is None:
+        return
+    if failure is not None:
+        raise failure
+    raise RuntimeError(
+        "Checkpointing is enabled, but pyfory-rebuild cannot encode a "
+        f"scenario on rank {failing_rank}. See that rank's message."
     )
 
 
@@ -1038,14 +2034,20 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         "describe their checkpoint's structural model configuration, so none "
         "of them writes one")
 
-    # Checked before anything rank-local: it depends only on the backend name
-    # and whether dill is importable, so every rank reaches the same verdict
-    # and there is nothing to agree on.
-    require_dill(backend)
+    # The dependency check depends only on the selected codec, so every rank
+    # reaches the same verdict before any rank-local filesystem work.
+    require_backend_dependency(backend)
 
     comm = _cylinder_comm(opt)
     rank = int(opt.cylinder_rank)
     is_publisher = rank == 0
+    write_id = None
+    if _uses_write_id(backend):
+        proposed_id = uuid.uuid4().hex if is_publisher else None
+        write_id = proposed_id if comm is None else comm.bcast(
+            proposed_id, root=0)
+        if not isinstance(write_id, str) or not write_id:
+            raise RuntimeError("Could not agree on the checkpoint write identity.")
     hub_dir = os.path.join(ckpt_dir, HUB_SUBDIR)
     final_dir = os.path.join(hub_dir, _generation_dirname(generation))
     staging_dir = f"{final_dir}.tmp"
@@ -1082,7 +2084,13 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
         # change during a run -- but it is per-rank data, so it belongs inside
         # the guarded region rather than ahead of the barrier.
         check_filename_collisions(opt.local_scenarios)
-        model_files = _write_models(opt, staging_dir, rank, backend)
+        nl_hash_files = {
+            sname: _nl_fingerprint_filename(rank, sname)
+            for sname in opt.local_scenarios
+        } if opt.options.get("checkpoint_nl_fingerprint", False) and \
+            _is_rebuild_backend(backend) else {}
+        model_files = _write_models(opt, staging_dir, rank, backend,
+                                    write_id=write_id)
         leaf = {
             "format_version": FORMAT_VERSION,
             "backend": backend,
@@ -1100,6 +2108,13 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
                 getattr(opt, "best_solution_obj_val", None)),
             "best_outer_bound": _hub_best_outer_bound(opt),
         }
+        if _uses_write_id(backend):
+            leaf["write_id"] = write_id
+        if _is_rebuild_backend(backend):
+            if opt.options.get("checkpoint_nl_fingerprint", False):
+                leaf["model_fingerprint_method"] = NL_FINGERPRINT_METHOD
+                leaf["nl_fingerprint_files"] = nl_hash_files
+            leaf["extension_model_state"] = gather_extension_model_state(opt)
         _atomic_write_bytes(
             os.path.join(staging_dir, _leaf_filename(rank)),
             lambda f: pickle.dump(leaf, f),
@@ -1125,7 +2140,8 @@ def write_checkpoint(opt, ckpt_dir, generation, backend=DILL_RELOAD_BACKEND):
     if is_publisher:
         try:
             _publish_generation(opt, ckpt_dir, hub_dir, final_dir,
-                                staging_dir, generation, backend)
+                                staging_dir, generation, backend,
+                                write_id=write_id)
         except Exception:
             # The manifest still names the previous generation (or nothing),
             # so everything else is garbage; give the disk back now rather
@@ -1176,8 +2192,16 @@ def _write_failure(opt, ckpt_dir, failure, failing_rank, rank):
     return err
 
 
+def _pyfory_version():
+    from importlib.metadata import PackageNotFoundError, version
+    try:
+        return version("pyfory")
+    except PackageNotFoundError:
+        return str(getattr(pyfory, "__version__", "unknown"))
+
+
 def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
-                        generation, backend):
+                        generation, backend, write_id=None):
     """Commit the staged generation. Rank 0 only, once every rank has written.
 
     Publishing order matters. The manifest is the commit point, so the
@@ -1210,19 +2234,26 @@ def _publish_generation(opt, ckpt_dir, hub_dir, final_dir, staging_dir,
     os.replace(scratch_dir, final_dir)
     _fsync_dir(hub_dir)
 
-    _publish_manifest(ckpt_dir, {
+    manifest = {
         "format_version": FORMAT_VERSION,
         "backend": backend,
         "generation": int(generation),
         "n_proc": int(opt.n_proc),
         "structural_fingerprint": structural_fingerprint(opt.options),
-    })
+    }
+    if _uses_write_id(backend):
+        if not write_id:
+            raise RuntimeError(f"{backend} publication requires write_id.")
+        manifest["write_id"] = write_id
+    if _uses_codec_version(backend):
+        manifest["codec_version"] = _codec_version(backend)
+    _publish_manifest(ckpt_dir, manifest)
 
     # Sweep everything the manifest does not name, rather than only the
     # generation the previous manifest did. A kill between any two steps above
     # can leave a directory behind, and deleting just the known predecessor
     # would let those accumulate for the life of the run.
-    _sweep_stale_generations(hub_dir, keep=int(generation))
+    _sweep_uncommitted_generations(ckpt_dir, hub_dir)
 
 
 def _sweep_uncommitted_generations(ckpt_dir, hub_dir):
@@ -1237,10 +2268,22 @@ def _sweep_uncommitted_generations(ckpt_dir, hub_dir):
         keep = None if manifest is None else int(manifest["generation"])
     except (OSError, ValueError, KeyError, TypeError):
         return
-    _sweep_stale_generations(hub_dir, keep)
+    keep_copy = None
+    if manifest is not None:
+        backend = manifest.get("backend")
+        write_id = manifest.get("write_id")
+        try:
+            keep_copy = _generation_copy_for_manifest(
+                hub_dir, keep, backend, write_id, rank=0)
+        except CheckpointMismatch:
+            # Do not delete either candidate if the manifest's committed copy
+            # cannot be identified. The next write must fail with the same
+            # refusal rather than discard the only possibly good generation.
+            raise
+    _sweep_stale_generations(hub_dir, keep, keep_copy=keep_copy)
 
 
-def _sweep_stale_generations(hub_dir, keep):
+def _sweep_stale_generations(hub_dir, keep, keep_copy=None):
     """Delete every generation directory except the one the manifest names.
 
     ``keep=None`` means the manifest names none. When the named generation's
@@ -1251,9 +2294,12 @@ def _sweep_stale_generations(hub_dir, keep):
     keep_names = set()
     if keep is not None:
         keep_name = _generation_dirname(keep)
-        keep_names.add(keep_name)
-        if not os.path.isdir(os.path.join(hub_dir, keep_name)):
-            keep_names.add(f"{keep_name}.retiring")
+        if keep_copy is not None:
+            keep_names.add(os.path.basename(keep_copy))
+        else:
+            keep_names.add(keep_name)
+            if not os.path.isdir(os.path.join(hub_dir, keep_name)):
+                keep_names.add(f"{keep_name}.retiring")
     try:
         entries = os.listdir(hub_dir)
     except OSError:
@@ -1266,29 +2312,44 @@ def _sweep_stale_generations(hub_dir, keep):
             shutil.rmtree(path, ignore_errors=True)
 
 
-def _write_models(opt, staging_dir, rank, backend):
-    """Dill each local scenario model into the staging directory."""
-    if backend != DILL_RELOAD_BACKEND:
-        raise ValueError(
-            f"Unknown checkpoint backend '{backend}'. The only implemented "
-            f"backend is '{DILL_RELOAD_BACKEND}'."
-        )
+def _write_models(opt, staging_dir, rank, backend, write_id=None):
+    """Write each local scenario using the selected model-state codec."""
+    require_backend_dependency(backend)
+    use_nl_fingerprint = bool(
+        _is_rebuild_backend(backend) and
+        (getattr(opt, "options", None) or {}).get(
+            "checkpoint_nl_fingerprint", False))
     model_files = {}
     for sname, s in opt.local_scenarios.items():
-        fname = _model_filename(rank, sname)
-        # The solver plugin is a live C handle plus a license session; it
-        # cannot be serialized and is rebuilt by _create_solvers on resume.
-        solver_plugin = getattr(s, "_solver_plugin", None)
-        if solver_plugin is not None:
-            del s._solver_plugin
-        try:
+        fname = _model_filename(rank, sname, backend)
+        if backend == DILL_RELOAD_BACKEND:
+            # Keep the historic model bytes and plugin removal dance intact.
+            solver_plugin = getattr(s, "_solver_plugin", None)
+            if solver_plugin is not None:
+                del s._solver_plugin
+            try:
+                _atomic_write_bytes(
+                    os.path.join(staging_dir, fname),
+                    lambda f, model=s: dill.dump(model, f),
+                )
+            finally:
+                if solver_plugin is not None:
+                    s._solver_plugin = solver_plugin
+        else:
+            snapshot = _snapshot_rebuild_model(s)
+            if use_nl_fingerprint:
+                fingerprint = _rebuild_model_nl_fingerprint(s)
+                hash_fname = _nl_fingerprint_filename(rank, sname)
+                _atomic_write_bytes(
+                    os.path.join(staging_dir, hash_fname),
+                    lambda f, digest=fingerprint: f.write(
+                        (digest + "\n").encode("ascii")),
+                )
             _atomic_write_bytes(
                 os.path.join(staging_dir, fname),
-                lambda f, model=s: dill.dump(model, f),
+                lambda f, state=snapshot: _new_rebuild_codec(backend).dump(
+                    state, f),
             )
-        finally:
-            if solver_plugin is not None:
-                s._solver_plugin = solver_plugin
         model_files[sname] = fname
     return model_files
 
@@ -1330,6 +2391,51 @@ def _read_manifest(ckpt_dir, missing_ok=False):
         return json.load(f)
 
 
+def _generation_copy_for_manifest(hub_dir, generation, backend, write_id,
+                                  rank):
+    """Find the final or retiring directory identified by the manifest."""
+    if _uses_write_id(backend) and not write_id:
+        raise CheckpointMismatch(
+            f"The {backend} manifest has no write_id, so its generation "
+            "cannot be selected safely."
+        )
+    dirname = _generation_dirname(int(generation))
+    candidates = [os.path.join(hub_dir, dirname),
+                  os.path.join(hub_dir, f"{dirname}.retiring")]
+    candidates = [path for path in candidates if os.path.isdir(path)]
+    matches = []
+    for path in candidates:
+        leaf_path = os.path.join(path, _leaf_filename(rank))
+        try:
+            with open(leaf_path, "rb") as stream:
+                leaf = pickle.load(stream)
+        except (OSError, pickle.PickleError, EOFError, AttributeError,
+                ValueError, TypeError):
+            continue
+        if not isinstance(leaf, dict):
+            continue
+        if leaf.get("backend") != backend:
+            continue
+        if _uses_write_id(backend) and \
+                leaf.get("write_id") != write_id:
+            continue
+        matches.append(path)
+
+    if backend == DILL_RELOAD_BACKEND and len(matches) > 1:
+        # Two dill copies have no write identity. Preserve their historical
+        # final-first behavior; the same-backend ambiguity predates pyfory.
+        final = os.path.join(hub_dir, dirname)
+        return final if final in matches else matches[0]
+    if len(matches) != 1:
+        reason = "no matching copy" if not matches else "multiple matching copies"
+        raise CheckpointMismatch(
+            f"The checkpoint manifest's generation {generation} has "
+            f"{reason} for backend '{backend}' and write identity "
+            f"'{write_id}'. Both generation directories have been preserved."
+        )
+    return matches[0]
+
+
 #: The hub leaf keys a resume reads by name. The load refuses a leaf missing
 #: any of them, so the refusal is agreed across the hub's ranks.
 LEAF_KEYS_READ_ON_RESUME = (
@@ -1359,8 +2465,22 @@ def load_checkpoint(opt, ckpt_dir):
         )
 
     backend = manifest.get("backend")
-    require_dill(backend)
-
+    require_backend_dependency(backend)
+    if _uses_codec_version(backend):
+        saved_version = manifest.get("codec_version")
+        if not isinstance(saved_version, str) or not saved_version:
+            raise CheckpointMismatch(
+                f"The {backend} manifest has no codec_version metadata."
+            )
+        current_version = _codec_version(backend)
+        if saved_version != current_version:
+            codec_name = backend.partition("-")[0]
+            raise CheckpointMismatch(
+                f"This checkpoint was written with {codec_name} "
+                f"{saved_version}, but this run has {codec_name} "
+                f"{current_version}. "
+                f"{backend} requires an exact codec version match."
+            )
     expected_fp = structural_fingerprint(opt.options)
     if manifest.get("structural_fingerprint") != expected_fp:
         raise CheckpointMismatch(
@@ -1383,13 +2503,10 @@ def load_checkpoint(opt, ckpt_dir):
         )
 
     generation = manifest["generation"]
-    gen_dir = os.path.join(ckpt_dir, HUB_SUBDIR, _generation_dirname(generation))
-    if not os.path.isdir(gen_dir) and os.path.isdir(f"{gen_dir}.retiring"):
-        # A write of this same generation was interrupted between retiring the
-        # old copy and moving the new one into place. The retired copy is the
-        # generation the manifest names, intact.
-        gen_dir = f"{gen_dir}.retiring"
     rank = int(opt.cylinder_rank)
+    hub_dir = os.path.join(ckpt_dir, HUB_SUBDIR)
+    gen_dir = _generation_copy_for_manifest(
+        hub_dir, generation, backend, manifest.get("write_id"), rank)
 
     leaf_path = os.path.join(gen_dir, _leaf_filename(rank))
     if not os.path.exists(leaf_path):
@@ -1409,6 +2526,12 @@ def load_checkpoint(opt, ckpt_dir):
             f"The checkpoint state '{leaf_path}' is not a dictionary, so it "
             "was not written by this mpi-sppy or has been damaged.")
     missing = [key for key in LEAF_KEYS_READ_ON_RESUME if key not in leaf]
+    if _uses_write_id(backend):
+        missing.extend(key for key in ("write_id",)
+                       if key not in leaf)
+    if _is_rebuild_backend(backend) and \
+            "extension_model_state" not in leaf:
+        missing.append("extension_model_state")
     if missing:
         raise CheckpointMismatch(
             f"The checkpoint state '{leaf_path}' has no "
@@ -1424,6 +2547,9 @@ def load_checkpoint(opt, ckpt_dir):
     }
     mismatched = [key for key, value in expected_leaf.items()
                   if leaf[key] != value]
+    if _uses_write_id(backend) and \
+            leaf.get("write_id") != manifest.get("write_id"):
+        mismatched.append("write_id")
     if mismatched:
         raise CheckpointMismatch(
             f"The checkpoint state '{leaf_path}' does not match its manifest "
@@ -1438,7 +2564,7 @@ def load_checkpoint(opt, ckpt_dir):
         )
 
     expected_model_files = {
-        sname: _model_filename(rank, sname)
+        sname: _model_filename(rank, sname, backend)
         for sname in opt.local_scenarios
     }
     if leaf["model_files"] != expected_model_files:
@@ -1447,16 +2573,63 @@ def load_checkpoint(opt, ckpt_dir):
             "model files this rank's scenarios require, so it is stale or "
             "has been damaged.")
 
+    if _is_rebuild_backend(backend):
+        fingerprint_method = leaf.get("model_fingerprint_method")
+        if fingerprint_method not in (None, NL_FINGERPRINT_METHOD):
+            raise CheckpointMismatch(
+                f"The checkpoint state '{leaf_path}' has unsupported model "
+                f"fingerprint method {fingerprint_method!r}.")
+        if fingerprint_method == NL_FINGERPRINT_METHOD:
+            expected_nl_files = {
+                sname: _nl_fingerprint_filename(rank, sname)
+                for sname in opt.local_scenarios
+            }
+            if leaf.get("nl_fingerprint_files") != expected_nl_files:
+                raise CheckpointMismatch(
+                    f"The checkpoint state '{leaf_path}' does not have "
+                    "exactly the NL fingerprint files this rank's scenarios "
+                    "require, so it is stale or has been damaged.")
+            nl_fingerprints = {}
+            for sname, fname in expected_nl_files.items():
+                path = os.path.join(gen_dir, fname)
+                try:
+                    with open(path, "rb") as f:
+                        contents = f.read()
+                except OSError as exc:
+                    raise CheckpointMismatch(
+                        f"The checkpoint in '{ckpt_dir}' is missing or "
+                        f"cannot read NL fingerprint file '{fname}' for "
+                        f"scenario '{sname}': {exc}") from exc
+                if not re.fullmatch(rb"[0-9a-f]{64}\n", contents):
+                    raise CheckpointMismatch(
+                        f"The NL fingerprint file '{fname}' for scenario "
+                        f"'{sname}' must contain exactly one lowercase "
+                        "64-character SHA-256 digest followed by a newline.")
+                nl_fingerprints[sname] = contents[:-1].decode("ascii")
+            leaf["nl_fingerprints"] = nl_fingerprints
+
     models = {}
     for sname, fname in leaf["model_files"].items():
-        path = os.path.join(gen_dir, fname)
-        if not os.path.exists(path):
+        if not os.path.isfile(os.path.join(gen_dir, fname)):
             raise CheckpointMismatch(
                 f"The checkpoint in '{ckpt_dir}' is missing the model file "
-                f"'{fname}' for scenario '{sname}'."
-            )
+                f"'{fname}' for scenario '{sname}'.")
+    for sname, fname in leaf["model_files"].items():
+        path = os.path.join(gen_dir, fname)
         with open(path, "rb") as f:
-            models[sname] = dill.load(f)
+            if backend == DILL_RELOAD_BACKEND:
+                models[sname] = dill.load(f)
+            else:
+                models[sname] = _new_rebuild_codec(backend).deserialize(
+                    f.read())
+        if _is_rebuild_backend(backend):
+            state = models[sname]
+            if not isinstance(state, dict) or \
+                    state.get("state_version") != REBUILD_STATE_VERSION:
+                raise CheckpointMismatch(
+                    f"The pyfory model file '{fname}' for scenario "
+                    f"'{sname}' has an unsupported state format."
+                )
 
     return leaf, models
 

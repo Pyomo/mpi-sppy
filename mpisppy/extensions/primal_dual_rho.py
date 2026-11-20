@@ -9,12 +9,12 @@
 
 import numpy as np
 
-import mpisppy.extensions.extension
 import mpisppy.MPI as MPI
 from mpisppy import global_toc
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 
 
-class PrimalDualRho(mpisppy.extensions.extension.Extension):
+class PrimalDualRho(RebuildSafeNoModelChanges):
     """ Increase / decrease rho globally based on primal-dual metrics
         Primal convergence is measured as weighted sum over all scenarios s
         p_{s} * ||x_{s} - \bar{x}||_1.

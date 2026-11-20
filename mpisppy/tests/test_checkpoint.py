@@ -51,6 +51,7 @@ from mpisppy.utils.config import Config
 solver_available, solver_name, persistent_available, persistent_solver_name = \
     get_solver()
 
+
 SCENARIO_NAMES = ["scen0", "scen1", "scen2"]
 CREATOR_KWARGS = {"use_integer": False, "crops_multiplier": 1}
 
@@ -131,6 +132,37 @@ class StateRecorder(Extension):
 
     def restore_state(self, state):
         pass
+
+
+class CheckpointPayloadExtension(Extension):
+    """A nested extension-object state payload used by backend tests."""
+
+    checkpoint_rebuild_safe = True
+
+    def __init__(self, opt):
+        super().__init__(opt)
+        self.payload = {
+            "iteration_marks": [1, 4, 9],
+            "scenario_metadata": {
+                "scen0": ("root", 0),
+                "scen1": ("root", 1),
+            },
+            "flags": {"enabled": True, "label": "payload"},
+        }
+        self.restored_payload = None
+
+    def checkpoint_state(self):
+        return copy.deepcopy(self.payload)
+
+    def restore_state(self, state):
+        self.restored_payload = copy.deepcopy(state)
+
+    def checkpoint_model_state(self):
+        return None
+
+    def restore_checkpoint_model_state(self, state):
+        if state is not None:
+            raise ValueError("CheckpointPayloadExtension has no model state")
 
 
 class MidIterMutator(Extension):
@@ -371,6 +403,18 @@ def _extension_class(name):
         return EndIterAfterSyncMutator
     if name == "recorder":
         return StateRecorder
+    if name in ("rebuild_safe", "rebuild_missing_model_state_hooks",
+                "rebuild_unencodable_model_state"):
+        from mpisppy.tests import test_checkpoint_pyfory_rebuild as rebuild_tests
+        return {
+            "rebuild_safe": rebuild_tests.RebuildSafeStateExtension,
+            "rebuild_missing_model_state_hooks":
+                rebuild_tests.RebuildMissingModelStateHooksExtension,
+            "rebuild_unencodable_model_state":
+                rebuild_tests.RebuildUnencodableModelStateExtension,
+        }[name]
+    if name == "checkpoint_payload":
+        return CheckpointPayloadExtension
     if name == "coeff_rho":
         from mpisppy.extensions.coeff_rho import CoeffRho
         return CoeffRho
@@ -391,7 +435,7 @@ def _extension_class(name):
 
 
 def _make_ph(options, scenario_names=None, extension_name=None,
-             extra_names=()):
+             extra_names=(), scenario_creator_kwargs=None):
     classes = []
     if "checkpoint_dir" in options:
         classes.append(Checkpointer)
@@ -414,7 +458,9 @@ def _make_ph(options, scenario_names=None, extension_name=None,
             scenario_names if scenario_names is not None else SCENARIO_NAMES,
             farmer.scenario_creator,
             farmer.scenario_denouement,
-            scenario_creator_kwargs=CREATOR_KWARGS,
+            scenario_creator_kwargs=(CREATOR_KWARGS
+                                     if scenario_creator_kwargs is None
+                                     else scenario_creator_kwargs),
             extensions=extensions,
             extension_kwargs=extension_kwargs,
         )
@@ -423,7 +469,9 @@ def _make_ph(options, scenario_names=None, extension_name=None,
         scenario_names if scenario_names is not None else SCENARIO_NAMES,
         farmer.scenario_creator,
         farmer.scenario_denouement,
-        scenario_creator_kwargs=CREATOR_KWARGS,
+        scenario_creator_kwargs=(CREATOR_KWARGS
+                                 if scenario_creator_kwargs is None
+                                 else scenario_creator_kwargs),
         extensions=extensions,
     )
 
@@ -434,14 +482,23 @@ def _flat_snapshot(ph):
             for key, value in _primal_snapshot(ph).items()}
 
 
-def _resume_and_dump(ckpt_dir, iters_this_run, out_path):
+def _resume_and_dump(ckpt_dir, iters_this_run, out_path,
+                     backend=checkpointing.DILL_RELOAD_BACKEND,
+                     overrides=None, extension_name=None):
     """Resume in this process and write the final state to out_path.
 
     The entry point test_resume_survives_a_fresh_process runs in a subprocess;
     it lives at module scope because that subprocess imports this module by
     name to reach it.
     """
-    ph = _make_ph(_options(iters_this_run, resume_from=ckpt_dir))
+    options = _options(iters_this_run, resume_from=ckpt_dir,
+                       checkpoint_backend=backend, **(overrides or {}))
+    if backend == checkpointing.PYFORY_REBUILD_BACKEND:
+        # Generic CLI setup attaches Checkpointer on a resume when a
+        # checkpoint directory is also configured. Keep that production
+        # path in this helper so its rebuild hooks are present in the child.
+        options["checkpoint_dir"] = ckpt_dir
+    ph = _make_ph(options, extension_name=extension_name)
     ph.ph_main()
     with open(out_path, "w") as f:
         json.dump({
@@ -3690,6 +3747,22 @@ class TestUnknownBackend(unittest.TestCase):
     def test_require_dill_ignores_other_backends(self):
         # Only the dill-reload backend needs dill; nothing should raise here.
         checkpointing.require_dill(checkpointing.LEAF_BACKEND)
+
+
+@unittest.skipUnless(checkpointing.dill_available,
+                     "dill is an optional checkpoint dependency")
+class TestDillCheckpointBytesRemainUnchanged(unittest.TestCase):
+    def test_default_model_bytes_are_still_direct_dill_dump_bytes(self):
+        opt = _make_ph(_options(1))
+        sname, scenario = next(iter(opt.local_scenarios.items()))
+        expected = checkpointing.dill.dumps(scenario)
+        with tempfile.TemporaryDirectory() as staging:
+            files = checkpointing._write_models(
+                opt, staging, 0, checkpointing.DILL_RELOAD_BACKEND)
+            self.assertEqual(files[sname],
+                             checkpointing._model_filename(0, sname))
+            with open(os.path.join(staging, files[sname]), "rb") as stream:
+                self.assertEqual(stream.read(), expected)
 
 
 @unittest.skipIf(not solver_available,

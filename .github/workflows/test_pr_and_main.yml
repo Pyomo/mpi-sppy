@@ -336,6 +336,13 @@ jobs:
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint.py -v
 
+      - name: Test pyfory-rebuild checkpoint models
+        env:
+          COVERAGE_FILE: ${{ github.workspace }}/.coverage
+          COVERAGE_PROCESS_START: ${{ github.workspace }}/.coveragerc
+        run: |
+          coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint_pyfory_rebuild.py -v
+
       - name: Test checkpoint/resume of extension state
         run: |
           coverage run $COV_ARGS -m pytest mpisppy/tests/test_checkpoint_extensions.py -v

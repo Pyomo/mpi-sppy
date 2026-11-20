@@ -48,7 +48,11 @@ import mpisppy.tests.examples.farmer as farmer
 import mpisppy.tests.examples.sizes.sizes as sizes
 import mpisppy.utils.checkpointing as checkpointing
 from mpisppy.extensions.checkpointer import Checkpointer
-from mpisppy.extensions.extension import Extension, MultiExtension
+from mpisppy.extensions.extension import (
+    Extension,
+    MultiExtension,
+    RebuildSafeNoModelChanges,
+)
 from mpisppy.opt.ph import PH
 from mpisppy.tests.utils import get_solver
 
@@ -92,6 +96,10 @@ def _options(max_iters, ckpt_dir=None, resume_from=None, **overrides):
 def _make_ph(options, ext_classes, model=farmer, scenario_names=None,
              creator_kwargs=None, **ph_kwargs):
     """A PH hub with the checkpointer and the extensions under test attached."""
+    scenario_names = (scenario_names if scenario_names is not None
+                      else FARMER_SCENARIOS)
+    creator_kwargs = (creator_kwargs if creator_kwargs is not None
+                      else FARMER_KWARGS)
     classes = list(ext_classes)
     effective_kwargs = (
         creator_kwargs if creator_kwargs is not None else FARMER_KWARGS
@@ -101,11 +109,14 @@ def _make_ph(options, ext_classes, model=farmer, scenario_names=None,
         # Direct PH callers must identify the model and its structural inputs.
         options.setdefault("checkpoint_structural_cfg", {
             "model": model.__name__,
+            "scenario_creator":
+                f"{model.__name__}.{model.scenario_creator.__name__}",
+            "scenario_names": list(scenario_names),
             "creator_kwargs": dict(effective_kwargs),
         })
     return PH(
         options,
-        scenario_names if scenario_names is not None else FARMER_SCENARIOS,
+        scenario_names,
         model.scenario_creator,
         model.scenario_denouement,
         scenario_creator_kwargs=effective_kwargs,
@@ -2093,7 +2104,10 @@ class TestShippedExtensionsAnswerTheQuestion(unittest.TestCase):
         return found
 
     def _all_extension_classes(self):
-        return self._all_classes(Extension, (Extension, MultiExtension))
+        return self._all_classes(
+            Extension,
+            (Extension, MultiExtension, RebuildSafeNoModelChanges),
+        )
 
     def test_every_shipped_converger_answers(self):
         from mpisppy.convergers.converger import Converger

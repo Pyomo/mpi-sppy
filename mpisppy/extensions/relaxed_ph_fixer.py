@@ -7,11 +7,11 @@
 # full copyright and license information.
 ###############################################################################
 from mpisppy.cylinders.spwindow import Field
-from mpisppy.extensions.extension import Extension
+from mpisppy.extensions.extension import RebuildSafeNoModelChanges
 from mpisppy.utils.sputils import is_persistent
 
 
-class RelaxedPHFixer(Extension):
+class RelaxedPHFixer(RebuildSafeNoModelChanges):
 
     def __init__(self, spobj):
         super().__init__(spobj)

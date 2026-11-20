@@ -156,6 +156,8 @@ def _same_objective(a, b):
 
 
 class Checkpointer(Extension):
+    checkpoint_rebuild_safe = True
+
     """Write a resumable checkpoint at each completed PH iteration."""
 
     # Nothing to carry across a resume. This is the extension doing the
@@ -308,7 +310,9 @@ class Checkpointer(Extension):
         opt = self.opt
         ckpt.require_checkpoint_structural_cfg(opt.options)
         if not self.spoke_mode and not self.dual_spoke_mode:
-            ckpt.require_dill(self.backend)
+            ckpt.require_backend_dependency(self.backend)
+            if ckpt._is_rebuild_backend(self.backend):
+                ckpt.require_extension_rebuild_contract(opt)
 
         # Two scenario names that sanitize to the same file name would
         # silently overwrite each other's model files; refuse now rather than
@@ -388,7 +392,15 @@ class Checkpointer(Extension):
         # Prove now that this run's models can actually be checkpointed. A run
         # that only found out at its first write would lose exactly the state
         # checkpointing exists to preserve.
-        ckpt.probe_model_is_dillable(self.opt)
+        ckpt.probe_model_checkpointable(self.opt, self.backend)
+
+    def checkpoint_model_state(self):
+        """The checkpointer adds no model components of its own."""
+        return None
+
+    def restore_checkpoint_model_state(self, state):
+        """The checkpointer has no model structure to recreate."""
+        return None
 
     def post_iter0(self):
         """Put a dual cylinder's W back, once there is a W to put it in.
