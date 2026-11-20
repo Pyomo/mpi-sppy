@@ -42,6 +42,9 @@ class _StubComm:
     def Get_rank(self):
         return self._rank
 
+    def allgather(self, value):
+        return [value] * self._size
+
 
 def _min_dict(role, **extra):
     # Dicts only need the keys WheelSpinner validates before the branch;

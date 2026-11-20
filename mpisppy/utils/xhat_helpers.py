@@ -32,6 +32,7 @@ import pyomo.environ as pyo
 from pyomo.opt import TerminationCondition
 
 import mpisppy.utils.sputils as sputils
+from mpisppy import MPI
 
 
 def _solve_model(model, solver_name, solver_options):
@@ -40,11 +41,12 @@ def _solve_model(model, solver_name, solver_options):
     solver = pyo.SolverFactory(solver_name)
     for k, v in (solver_options or {}).items():
         solver.options[k] = v
-    if sputils.is_persistent(solver):
-        solver.set_instance(model)
-        results = solver.solve(tee=False)
-    else:
-        results = solver.solve(model, tee=False)
+    with MPI.progress_active():
+        if sputils.is_persistent(solver):
+            solver.set_instance(model)
+            results = solver.solve(tee=False)
+        else:
+            results = solver.solve(model, tee=False)
     tc = results.solver.termination_condition
     if tc not in (TerminationCondition.optimal, TerminationCondition.feasible):
         raise RuntimeError(

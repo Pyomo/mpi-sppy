@@ -7,19 +7,35 @@
 # full copyright and license information.
 ###############################################################################
 ''' Basic test script to make sure that the one-sided MPI calls work as
-    intended. Runs on two processes. Will raise an assertion error if the
-    Lock/Get/Unlock combination blocks. Otherwise, exits normally and produces
-    no output.
+    intended. Runs on two processes. If the Lock/Get/Unlock combination
+    cannot make progress, the script may block. Otherwise, it checks the
+    expected values and prints the pass message.
 
     Just because this test passes doesn't mean that MPI one-sided calls will
     work as expected.
 
     Takes about 4 seconds to execute, with all the sleep() calls.
+
+    Set MPISPPY_MPI_PROGRESS_THREAD=1 to initialize MPI_THREAD_MULTIPLE and
+    activate mpi-sppy's progress thread while the processes sleep. Without
+    that setting, this uses the ordinary mpi4py-backed MPI interface.
 '''
+import os
 import sys
 import time
 
-import mpi4py.MPI as mpi
+# Use mpi-sppy's MPI wrapper only when testing its progress thread.
+if os.environ.get("MPISPPY_MPI_PROGRESS_THREAD") == "1":
+    from mpisppy import MPI as mpi
+
+    progress_during_idle = mpi.progress_active
+else:
+    from contextlib import nullcontext
+
+    import mpi4py.MPI as mpi
+
+    progress_during_idle = nullcontext
+
 import numpy as np
 
 
@@ -38,7 +54,8 @@ def main():
 
     if (rank == 0):
         buff[:] = 3. * np.ones(array_size, dtype='d')
-        time.sleep(3)
+        with progress_during_idle():
+            time.sleep(3)
         buff[:] = np.arange(array_size)
 
         win.Lock(1)
@@ -47,7 +64,8 @@ def main():
 
     elif (rank == 1):
         buff = np.ones(array_size, dtype='d')
-        time.sleep(1)
+        with progress_during_idle():
+            time.sleep(1)
 
         win.Lock(0)
         win.Get((buff, array_size, mpi.DOUBLE), target_rank=0)
@@ -55,7 +73,8 @@ def main():
 
         assert(buff[-1] == 3.)
 
-        time.sleep(3)
+        with progress_during_idle():
+            time.sleep(3)
 
         win.Lock(1)
         win.Get((buff, array_size, mpi.DOUBLE), target_rank=1)

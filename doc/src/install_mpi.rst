@@ -20,10 +20,71 @@ Here are two methods that seem to work well for installation, at least when cons
 
    * ``pip install -e .[mpi]`` (after cloning and moving to the repo root directory)
 
-To test your installation, give this command (once mpi-sppy is
-installed it works from any directory):
+Native MPI progress worker
+^^^^^^^^^^^^^^^^^^^^^^^^^^
 
-``mpirun -n 2 mpi-sppy-one-sided-test``
+On Linux and macOS, the native progress worker is built when ``mpi4py`` and a
+matching MPI compiler are available. A single-process compiler probe records
+the MPI library version, communicator size, and source and tag constants. If
+the probe fails, or on other platforms, the build does not include the worker.
+An explicitly selected but missing ``CC`` is an error. Once the probe succeeds,
+a failure compiling or linking the worker also fails the build. MPI builds
+without the worker remain supported, including on Windows; the MPI progress
+thread is unavailable in those installs.
+
+Make an sdist from the checkout, then install it in an MPI virtualenv::
+
+   python -m pip install build
+   python -m build --sdist
+   python -m pip install "setuptools>=68" wheel mpi4py
+   CC=mpicc python -m pip install --no-build-isolation --no-cache-dir dist/mpi_sppy-*.tar.gz
+
+Select the ``mpicc`` that matches the MPI implementation used by ``mpi4py``.
+Install the sdist separately in each virtualenv when using multiple MPI
+implementations. Each pip build then has a fresh source directory and produces
+an extension linked to that virtualenv's MPI stack. An editable install also
+works from a shared checkout after ``mpi4py`` and the build tools are installed::
+
+   CC=mpicc python -m pip install --no-build-isolation -e .
+
+Editable extensions are installed into each virtualenv rather than copied into
+the checkout, so virtualenvs using different MPI implementations do not share
+the compiled worker. Reinstall the editable package after changing its C code
+or the virtualenv's MPI installation.
+
+The ``[mpi]`` extra alone does not enable the native build: pip builds
+mpi-sppy before installing runtime extras, and an isolated build cannot see
+``mpi4py`` from the target environment. The C source is included in the
+source distribution so it can be rebuilt in an MPI-enabled environment.
+
+``MPISPPY_MPI_PROGRESS_THREAD=1`` requests ``MPI_THREAD_MULTIPLE`` and starts
+the native progress extension. When ``MVAPICH_ASYNC_PROGRESS=1`` is set on
+MVAPICH newer than 2.3.7, mpi-sppy uses the runtime's async progress instead.
+The extension is not required in that case, and a lower MPI thread level is
+accepted. Otherwise,
+the worker is loaded after comparing its build signature with values reported
+by mpi4py. A missing extension or a signature mismatch raises an error before
+the worker uses mpi4py's communicator. The signature check detects common
+mismatches but cannot prove that two separately loaded copies of an MPI library
+share runtime state. Set ``MPISPPY_MPI_PROGRESS_INTERVAL_US`` to a positive,
+finite number to change the maximum polling interval from its default of 500
+microseconds.
+
+Before a wheel starts, mpi-sppy checks whether its ranks span multiple nodes.
+If they do, every rank must use ``MPISPPY_MPI_PROGRESS_THREAD=1`` or, on
+MVAPICH newer than 2.3.7, ``MVAPICH_ASYNC_PROGRESS=1``. Otherwise rank zero
+prints an explanation and the MPI job exits. Single-node wheels do not require
+either option.
+
+To check the MPI runtime without importing mpi-sppy by default, give this
+command (once mpi-sppy is installed it works from any directory):
+
+``mpirun -n 2 python -m mpi4py -m mpi_one_sided_test``
+
+With ``MPISPPY_MPI_PROGRESS_THREAD`` unset or set to ``0``, this checks the MPI
+runtime's passive-target RMA progress. Set it to ``1`` to check the same operation with
+mpi-sppy's progress worker active while the target is idle. The worker can
+make the test pass even if the native runtime check fails.
 
 If you don't see any error messages, you might have an MPI
 installation that will work well. Note that even if there is
