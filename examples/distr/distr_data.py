@@ -189,6 +189,14 @@ def region_dict_creator(scenario_name):
 
     return region_dict
 
+def _json_keys(obj):
+    """ JSON keys must be strings: write tuple keys such as ("F1_1","DC1") as
+    their str(), which ast.literal_eval turns back into the tuple.
+    """
+    if isinstance(obj, dict):
+        return {(str(k) if isinstance(k, tuple) else k): _json_keys(v) for k, v in obj.items()}
+    return obj
+
 if __name__ == "__main__":
     #creating the json files
     for num_scens in range(2,5):
@@ -196,16 +204,16 @@ if __name__ == "__main__":
         data = inter_region_dict_creator(num_scens)
 
         # Write the data to the JSON file
-        with open(inter_region_dict_path, 'w') as json_file:
-            json.dump(data, json_file, indent=4)
+        with open(inter_region_dict_path, 'w', encoding="utf-8") as json_file:
+            json.dump(_json_keys(data), json_file, indent=4)
 
     for i in range(1,5):
         region_dict_path = f'json_dicts.region{i}_dict.json'
         data = region_dict_creator(f"Region{i}")
 
         # Write the data to the JSON file
-        with open(region_dict_path, 'w') as json_file:
-            json.dump(data, json_file, indent=4)
+        with open(region_dict_path, 'w', encoding="utf-8") as json_file:
+            json.dump(_json_keys(data), json_file, indent=4)
 
 ########################################################################################################################
 # Scalable datasets

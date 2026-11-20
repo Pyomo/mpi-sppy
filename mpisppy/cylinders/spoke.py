@@ -292,9 +292,9 @@ class InnerBoundSpoke(_BoundSpoke):
         best_xhat_buf = self.send_buffers[Field.BEST_XHAT]
         ci = 0
         for s in self.opt.local_scenarios.values():
-            solution_cache = s._mpisppy_data.best_solution_cache._dict
-            for ndn_varid in s._mpisppy_data.varid_to_nonant_index:
-                best_xhat_buf[ci] = solution_cache[ndn_varid][1]
+            solution_cache = s._mpisppy_data.best_solution_cache
+            for var in s._mpisppy_data.nonant_indices.values():
+                best_xhat_buf[ci] = solution_cache[var]
                 ci += 1
             best_xhat_buf[ci] = s._mpisppy_data.best_solution_inner_bound
             ci += 1
