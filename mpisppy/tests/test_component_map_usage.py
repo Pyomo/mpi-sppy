@@ -9,7 +9,7 @@
 
 import pyomo.environ as pyo
 
-from mpisppy.spbase import _put_var_vals_in_component_map_dict
+from mpisppy.spbase import _put_var_vals_in_component_map
 
 
 def test_component_map_usage():
@@ -20,7 +20,7 @@ def test_component_map_usage():
 
     cmap = pyo.ComponentMap()
 
-    _put_var_vals_in_component_map_dict(cmap._dict, m.component_data_objects(pyo.Var))
+    _put_var_vals_in_component_map(cmap, m.component_data_objects(pyo.Var))
 
     assert cmap[m.x[1]] == 2
     assert cmap[m.x[2]] == 2
