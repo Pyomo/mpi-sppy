@@ -48,7 +48,10 @@ If you want a positional arg, you have to DIY:
 """
 
 import argparse
+import functools
 import math
+import numbers
+import types
 
 import pyomo.common.config as pyofig
 
@@ -72,7 +75,7 @@ class Config(pyofig.ConfigDict):
     # out_of_the_box.HUB_FLAGS has to agree with this list or OOTB will not
     # recognise a hub the user asked for and may substitute the EF; the OOTB
     # validator checks the two against each other.
-    HUBS = ["APH", "subgradient_hub", "fwph_hub", "ph_primal_hub",
+    HUBS = ["APH", "subgradient_hub", "fwph_hub", "aphfw_hub", "ph_primal_hub",
             "lshaped_hub", "cg_hub", "dualcg_hub", "fwph_objgap_hub"]
 
     # remember that the parent uses slots
@@ -691,15 +694,17 @@ class Config(pyofig.ConfigDict):
                             domain=float,
                             default=1.0)
         self.add_to_config('aph_frac_needed',
-                            description='Fraction of sub-problems required before computing projective step (default 1.0)',
+                            description='Fraction of sub-problems required before computing projective step'
+                                        ' (with --aphfw-hub, a fraction of the scenario solves; default 1.0)',
                             domain=float,
                             default=1.0)
         self.add_to_config('aph_dispatch_frac',
-                            description='Fraction of sub-problems to dispatch at each step of asychronous projective hedging (default 1.0)',
+                            description='Fraction of sub-problems to dispatch at each step of asychronous projective hedging'
+                                        ' (not used by --aphfw-hub; default 1.0)',
                             domain=float,
                             default=1.0)
         self.add_to_config('aph_sleep_seconds',
-                            description='Spin-lock sleep time for APH (default 0.01)',
+                            description='Spin-lock sleep time for APH (not used by --aphfw-hub; default 0.01)',
                             domain=float,
                             default=0.01)
 
@@ -1104,6 +1109,168 @@ class Config(pyofig.ConfigDict):
                            description="Inject columns calculated by xhat spokes into the FWPH algorithm",
                            domain=bool,
                            default=False)
+
+    def aphfw_args(self):
+        """Options for the C++ FW-APH hub (--aphfw-hub; see mpisppy.opt.aphfw).
+
+        Options of the APH algorithm are named aph_*; the ones named
+        aphfw_* are about Frank-Wolfe or the compiled hub itself.  The hub
+        also reads aph_gamma, aph_nu and aph_frac_needed, which aph_args
+        registers for --APH as well, so this registers aph_args too (a
+        second registration of an option is ignored).
+        """
+        self.aph_args()
+        self.add_to_config(name="aphfw_hub",
+                           description="Use the C++ FW-APH hub",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_no_fw",
+                           description="With --aphfw-hub, solve each proximal"
+                                       " subproblem in one solver call instead of"
+                                       " by Frank-Wolfe (the --aphfw-fw-* options and"
+                                       " --aphfw-obj-cutoff are then refused)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_fw_tmax",
+                           description="FW maximum inner iterations",
+                           domain=int,
+                           default=1)
+
+        self.add_to_config(name="aphfw_fw_tau",
+                           description="FW convergence tolerance",
+                           domain=float,
+                           default=0.01)
+
+        self.add_to_config(name="aph_primal_term_thresh",
+                           description="Primal termination tolerance (applied to u) (--aphfw-hub only)",
+                           domain=float,
+                           default=0.01)
+
+        self.add_to_config(name="aph_dual_term_thresh",
+                           description="Dual termination tolerance (applied to v) (--aphfw-hub only)",
+                           domain=float,
+                           default=0.01)
+
+        self.add_to_config(name="aph_staleness_threshold",
+                           description="Max cycles between scenario dispatches (--aphfw-hub only)",
+                           domain=int,
+                           default=20)
+
+        self.add_to_config(name="aph_display_progress",
+                           description="Display convergence info at every cycle (--aphfw-hub only)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_obj_cutoff",
+                           description="FWAPH: add objective cutoff in FW inner MIP solves to force improving directions",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_solve_time_limit",
+                           description="Time limit in seconds for each subproblem solve"
+                                       " in the C++ hub (Lagrangian, proximal and"
+                                       " Frank-Wolfe linear solves)",
+                           domain=float,
+                           default=300.0)
+
+        self.add_to_config(name="aphfw_final_lagrangian",
+                           description="Run the termination Lagrangian solve after the aphfw hub's"
+                                       " main loop and let its bound compete with the bound spokes"
+                                       " (trace symbol W). Off by default in hub mode because a"
+                                       " --lagrangian spoke usually supplies the outer bound.",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_iter0_fw_step",
+                           description="End startup with a synchronous FW step on every scenario so"
+                                       " that (x0, y0) is a valid subgradient pair: 'auto' (only when"
+                                       " the original objective is quadratic), 'on', or 'off'.",
+                           domain=str,
+                           default="auto")
+
+        self.add_to_config(name="aph_iter0_w_multiplier",
+                           description="Start from W = m * rho * (xbase - z0) with this m, a PH-style"
+                                       " guess at the duals. The default 0.0 gives W = 0. (--aphfw-hub only)",
+                           domain=float,
+                           default=0.0)
+
+        self.add_to_config(name="aphfw_verbosity",
+                           description="C++ debug output verbosity level",
+                           domain=int,
+                           default=0)
+
+        self.add_to_config(name="aphfw_workers_per_rank",
+                           description="C++ worker threads per MPI rank for parallel scenario solves",
+                           domain=int,
+                           default=1)
+
+        self.add_to_config(name="aph_block_sync",
+                           description="Allow only block asynchronism (--aphfw-hub only)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aph_leading_dispatch_only",
+                           description="Only dispatch during leading sync phase (--aphfw-hub only)",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aphfw_W_trace_prefix",
+                           description="If given, write a W trace file with this prefix",
+                           domain=str,
+                           default="")
+
+        self.add_to_config(name="aphfw_solve_times_trace_prefix",
+                           description="If given, write per-rank FW solve timing CSV",
+                           domain=str,
+                           default="")
+
+        self.add_to_config(name="aphfw_scenario_dir",
+                           description="Directory in which each hub rank "
+                           "writes its scenario files for the C++ (in a "
+                           "temporary subdirectory of its own, removed when the "
+                           "run finishes normally). It must exist on every node "
+                           "the hub runs on but need not be shared (default: "
+                           "the system's temporary directory)",
+                           domain=str,
+                           default="")
+
+        self.add_to_config(name="aphfw_keep_scenario_files",
+                           description="Do not remove each hub rank's scenario "
+                           "files and solver.log at the end of the run",
+                           domain=bool,
+                           default=False)
+
+        self.add_to_config(name="aph_omicron_rho_multiplier",
+                           description="k in omicron = k * rho at post-iter-0 freeze (default 1.0) (--aphfw-hub only)",
+                           domain=float,
+                           default=1.0)
+
+        self.add_to_config(name="aph_omicron_all",
+                           description="If > 0, freeze omicron uniformly at setup to this scalar (overrides multiplier) (--aphfw-hub only)",
+                           domain=float,
+                           default=-1.0)
+
+        self.add_to_config(name="aph_omicron_csv",
+                           description="If non-empty, freeze omicron from this CSV at setup (overrides multiplier) (--aphfw-hub only)",
+                           domain=str,
+                           default="")
+
+        self.add_to_config(name="aph_omicron_min",
+                           description="Lower bound check on omicron entries at freeze (--aphfw-hub only)",
+                           domain=float,
+                           default=1e-6)
+
+        self.add_to_config(name="aph_omicron_max",
+                           description="Upper bound check on omicron entries at freeze (--aphfw-hub only)",
+                           domain=float,
+                           default=1e6)
+
+        self.add_to_config(name="aph_check_omicron_invariant",
+                           description="Run S(N)-constancy check on omicron at freeze (--aphfw-hub only)",
+                           domain=bool,
+                           default=True)
 
     def cg_args(self):
 
@@ -2126,6 +2293,67 @@ class Config(pyofig.ConfigDict):
 
 
 #=================
+# The two APH hubs share the aph_* options aph_args registers.  aphfw_args
+# registers more aph_* options, which only the compiled hub (--aphfw-hub)
+# reads; --APH refuses non-default values of those (aphfw_hub_only_options),
+# and --aphfw-hub refuses the aph_args options it does not read (see
+# mpisppy/opt/aphfw.py).  The aphfw_* options are not checked under --APH
+# (issue #955).
+
+@functools.cache
+def _aph_registrations():
+    """(names aph_args registers, read-only {name: default} for aphfw_args)."""
+    aph = Config()
+    aph.aph_args()
+    both = Config()
+    both.aphfw_args()   # registers aph_args too
+    return (frozenset(aph),
+            types.MappingProxyType({name: both[name] for name in both}))
+
+
+def aph_args_option_names():
+    """The names aph_args registers (APH and the options both hubs see)."""
+    return _aph_registrations()[0]
+
+
+def aphfw_hub_only_options():
+    """The aph_* options only --aphfw-hub reads: aphfw_args minus aph_args."""
+    aph_names, defaults = _aph_registrations()
+    return tuple(name for name in defaults
+                 if name.startswith("aph_") and name not in aph_names)
+
+
+# Values other than the default that still mean "not set".
+_UNSET_SENTINELS = {
+    # any number <= 0 (numpy ones too, not bool): no override
+    "aph_omicron_all": lambda value: (isinstance(value, numbers.Real)
+                                      and not isinstance(value, bool)
+                                      and value <= 0),
+}
+
+
+def aph_value_means_unset(name, value):
+    """True if value is one of name's "not set" sentinels (not its default)."""
+    return name in _UNSET_SENTINELS and _UNSET_SENTINELS[name](value)
+
+
+def refuse_set_options(get_option, names, why):
+    """Raise if any option in names is set to other than its default.
+
+    names must be options aphfw_args registers (which include aph_args's,
+    the aph_* and the aphfw_* options); get_option(name, default) reads the
+    run's value; why ends the message.
+    """
+    _, defaults = _aph_registrations()
+    for name in names:
+        default = defaults[name]
+        value = get_option(name, default)
+        if value is None or value == default or aph_value_means_unset(name, value):
+            continue
+        raise ValueError(f"--{name.replace('_', '-')} {why} "
+                         f"(got {value}, default {default})")
+
+
 if __name__ == "__main__":
     # a place for ad hoc testing by developers
     config = Config()
