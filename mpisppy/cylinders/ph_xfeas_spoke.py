@@ -16,6 +16,18 @@ class PHXFeasSpoke(Spoke):
     send_fields = (*Spoke.send_fields, Field.XFEAS)
     receive_fields = (*Spoke.receive_fields, )
 
+    # This spoke runs the full PH loop, so its extensions (e.g. GradRho)
+    # run their hooks here and need their fields, as on PHHub.
+    def register_send_fields(self):
+        super().register_send_fields()
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.register_send_fields()
+
+    def register_receive_fields(self):
+        super().register_receive_fields()
+        if getattr(self.opt, "extensions", None) is not None:
+            self.opt.extobject.register_receive_fields()
+
     def update_rho(self):
         rho_factor = self.opt.options.get("rho_factor", 1.0)
         if rho_factor == 1.0:

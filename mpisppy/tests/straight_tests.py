@@ -190,6 +190,24 @@ _doone(cmdstr)
 
 
 #####################################################
+# generic_cylinders with --grad-rho and --ph-xfeas-spoke (issue #876).
+# GradRho also runs on the ph_xfeas spoke and reads BEST_XHAT there, so the
+# spoke has to register its extensions' fields.
+cmdstr = (
+    f"mpiexec -np 3 {pyexe} {python_args} -m mpi4py {shlex.quote(gc_path)} "
+    f"--module-name {shlex.quote(farmer_module)} "
+    f"--num-scens 3 "
+    f"--solver-name {shlex.quote(solver_name)} "
+    f"--max-solver-threads 1 "
+    f"--default-rho 1 "
+    f"--max-iterations 3 "
+    f"--xhatshuffle --ph-xfeas-spoke --grad-rho"
+)
+
+_doone(cmdstr)
+
+
+#####################################################
 # L-shaped with a multi-rank hub (regression test for issue #551).
 # farmer_lshapedhub.py builds the middle scenario into the root problem
 # (root_scenarios), so with one scenario per rank this exercises the
