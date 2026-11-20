@@ -732,8 +732,8 @@ class SPBase:
     def _cache_best_solution(self):
         for k,s in self.local_scenarios.items():
             scenario_cache = pyo.ComponentMap()
-            _put_var_vals_in_component_map_dict(
-                scenario_cache._dict,
+            _put_var_vals_in_component_map(
+                scenario_cache,
                 s.component_data_objects(pyo.Var)
             )
             s._mpisppy_data.best_solution_cache = scenario_cache
@@ -1000,6 +1000,8 @@ class SPBase:
             sputils.write_nonant_tree_csv(file_name, node_to_rows)
 
 
-def _put_var_vals_in_component_map_dict(sn_cache_dict, var_iter):
+def _put_var_vals_in_component_map(cmap, var_iter):
+    # Through the public interface: how ComponentMap keys its _dict
+    # changed in Pyomo 6.11 (id(var) before, the hasher's key since).
     for var in var_iter:
-        sn_cache_dict[id(var)] = (var, var.value)
+        cmap[var] = var.value
